@@ -23,7 +23,7 @@ from alta_protocol import (
 )
 
 # Live read-only capture, 2026-11-13, unit 1, FC03, address 13, count 8
-# (docs/field-notes.md).  Values: 1, 140, 32767, 121, 120, 32767, 0, 92.
+# (docs/registers.md). Values: 1, 140, 32767, 121, 120, 32767, 0, 92.
 CAPTURE = bytes.fromhex("0103100001008c7fff007900787fff0000005c455f")
 CAPTURE_RAW = (0x0001, 0x008C, 0x7FFF, 0x0079, 0x0078, 0x7FFF, 0x0000, 0x005C)
 

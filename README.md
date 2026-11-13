@@ -1,32 +1,56 @@
 # Burnham ALTA for Home Assistant
 
-**Experimental.** This is a local, read-only Home Assistant integration for ALTA boilers using direct Modbus RTU or a Modbus TCP gateway. It has been tested against a real boiler through a TCP-to-RTU gateway in Home Assistant 2026.10.1.
+Monitor your ALTA boiler's temperatures, heat demand, pumps, burner activity and fault codes in Home Assistant. The integration reads data over Modbus. It does not control the boiler or change its settings.
 
-## Safety
+Tested with an ALTA120B1G00, Home Assistant 2026.10.1 and a Raspberry Pi USB-to-RS485 gateway. Other ALTA models and firmware may differ.
 
-The boiler can accept commands that change its operation. This project must not transmit Modbus write or reset commands. In particular, a gateway that passes arbitrary Modbus traffic exposes the boiler to writes from other clients, even when Home Assistant is configured to use only sensors. Modbus TCP is unauthenticated; restrict access and use a gateway that demonstrably enforces read-only operation. No gateway is currently recommended or deployed by this project.
+## Wire the boiler
 
-Read [`docs/field-notes.md`](docs/field-notes.md) for wiring references, captured frames, and the remaining register uncertainties. This software is not a safety or limit control and does not replace the boiler's existing controls.
+The ALTA's RJ45 connection carries RS485. It is not an Ethernet port. MB2 uses three wires:
 
-## Installation (experimental)
+| Boiler RJ45 pin | Connect to the RS485 adapter |
+| --- | --- |
+| 1: D+ | D+ / + |
+| 2: GND | Signal GND |
+| 3: D- | D- / - |
 
-Add `https://github.com/aserper/boiler-pi` as a custom integration repository in HACS, install **Burnham ALTA**, and restart Home Assistant. Add the integration under **Settings → Devices & services**. Choose Modbus TCP for a translating gateway or serial RTU for a directly attached adapter. The Pi gateway tested here uses unit 1, port 1502. A transparent serial TCP stream is not Modbus TCP.
+![ALTA MB2 wiring to a USB RS485 adapter](docs/wiring.svg)
 
-The integration exposes 23 read-only sensors: target, supply, return, DHW and stack temperatures; burner and demand-source codes; DHW/CH1/CH2 demand; pump statuses; flame signal; requested and actual fan speed; hold and lockout codes; burner runtime and cycle counts; and pump cycle counts. Demand and pump flags are reported as raw 0/1 values. `0x7fff` is provisionally treated as unavailable for temperatures. Counter word order and register-to-sensor assignments remain subject to validation against the boiler. No control entities are provided.
+[Read the wiring guide](docs/wiring.md) before connecting anything. It covers cable colors, adapter labels and the pins you must leave disconnected. Internal work should be done by a qualified installer with boiler power isolated.
 
-Polling defaults to every 10 seconds. Use the integration's **Configure** dialog to choose a different interval in whole seconds, from 5 to 3600. The option is stored with the config entry; existing entries keep the 10 second default until it is changed, and Home Assistant reloads the entry when the option changes.
+You can attach the adapter directly to your Home Assistant host, or use a Raspberry Pi as a [Modbus TCP gateway](docs/gateway.md).
 
-The reference-styled dashboard is in [`docs/dashboard-styled.json`](docs/dashboard-styled.json), with [installation notes](docs/dashboard-notes.md). It uses button-card, card-mod and apexcharts-card for the custom layout; the native-card fallback remains in `docs/dashboard-ready.yaml`. Replace the placeholder entity IDs with those assigned by your installation. The [verification record](docs/verification.md) distinguishes automated tests, live boiler checks and provisional interpretations.
+## Install
 
-The **Configure** dialog also lets you name the CH1, CH2 and DHW consumers. These are display aliases only: existing entity IDs and boiler settings are unchanged. The styled dashboard reads the names automatically. Confirm the physical CH1/CH2 zone wiring before assigning floor names.
+1. In HACS, open **Custom repositories** and add `https://github.com/aserper/boiler-pi` as an Integration.
+2. Download **Burnham ALTA** and restart Home Assistant.
+3. Open **Settings > Devices & services > Add integration** and choose **Burnham ALTA**.
+4. Choose a connection:
+   - **Modbus TCP:** enter your gateway's address and port. The Pi setup in this guide uses port `1502` and unit ID `1`.
+   - **Serial RTU:** enter the adapter's device path on the Home Assistant host. Prefer `/dev/serial/by-id/...` over `/dev/ttyUSB0`.
 
-## Development
+The serial defaults are `38400`, `8-N-1`, unit ID `1`. The gateway must translate Modbus TCP to RTU. A raw TCP serial bridge will not work with this integration's TCP mode.
 
-The pure response decoder can be exercised without hardware or dependencies:
+## Configure
 
-```sh
-python3 -B -m unittest -v test_alta_protocol
-python3 -B -m unittest discover -s tests -p 'test_ha_*.py' -v
-```
+Open the integration's **Configure** screen to change:
 
-Observed register mappings and unavailable-value handling are provisional until validated against further boiler data and other firmware. Do not use these measurements for safety-critical decisions.
+- Polling interval: 10 seconds by default, adjustable from 5 to 3600 seconds.
+- CH1, CH2 and DHW names: use names such as "Upstairs", "Main floor" and "Hot water" after checking which heating circuit each input represents.
+
+These names change display labels only. Your existing entity IDs and boiler settings stay the same. If you have also renamed an entity in Home Assistant, that name takes precedence. Clear the entity-name override to use the name from Configure.
+
+## Dashboard
+
+The [styled dashboard](docs/dashboard-styled.json) shows temperatures, demand, pump status, diagnostics, counters and recorded temperature history. It needs button-card, card-mod and apexcharts-card from HACS. [Dashboard setup](docs/dashboard-notes.md) explains how to connect it to your entities. A [simpler native-card version](docs/dashboard-ready.yaml) is also available.
+
+The integration exposes 23 sensors. Missing temperature readings show as unavailable. State names on the styled dashboard follow the ALTA manual; raw codes remain available on the entities. See the [register notes](docs/registers.md) for addresses and the few values that still need confirmation.
+
+## If readings stop
+
+- Check that the USB adapter is still present and the gateway service is running.
+- Check the Pi's power supply. Undervoltage can make USB and network connections unreliable.
+- Check the unit ID and serial settings. Only one program should own the serial port.
+- For a container-based Home Assistant install, make sure the serial device is passed through to the container.
+
+Modbus TCP has no login or encryption. Keep it off the internet and restrict gateway access. A gateway that allows only function 03 adds protection against writes from other clients. Boiler fault handling and safety limits remain the boiler's job.

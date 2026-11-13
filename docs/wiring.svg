@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="580" viewBox="0 0 1060 580" role="img" aria-labelledby="title desc">
+  <title id="title">Burnham ALTA MB2 to USB RS485 adapter wiring</title>
+  <desc id="desc">Logical wiring diagram. Boiler RJ45 pin 1 D plus connects to adapter D plus. Pin 2 GND connects to adapter signal ground. Pin 3 D minus connects to adapter D minus. Pins 4 through 8 are not connected to this adapter. This is not a connector orientation drawing.</desc>
+  <rect width="1060" height="580" rx="18" fill="#f7f9fc"/>
+  <g font-family="Arial, sans-serif" fill="#172536">
+    <text x="42" y="52" font-size="26" font-weight="700">ALTA MB2 wiring</text>
+    <text x="42" y="82" font-size="16">Logical pin map. Identify physical pin numbers before connecting wires.</text>
+    <rect x="42" y="120" width="300" height="316" rx="12" fill="#e5edf5" stroke="#667d96" stroke-width="2"/>
+    <text x="64" y="157" font-size="21" font-weight="700">Boiler RJ45: MB2 / EMS</text>
+    <text x="64" y="185" font-size="15">Pin number and signal</text>
+    <rect x="718" y="120" width="300" height="316" rx="12" fill="#e5edf5" stroke="#667d96" stroke-width="2"/>
+    <text x="740" y="157" font-size="21" font-weight="700">USB-to-RS485 adapter</text>
+    <text x="740" y="185" font-size="15">Match signals, not A/B letters</text>
+    <g font-size="21" font-weight="700">
+      <text x="76" y="237">1   D+</text>
+      <text x="76" y="317">2   GND</text>
+      <text x="76" y="397">3   D-</text>
+      <text x="756" y="237">D+ / +</text>
+      <text x="756" y="317">Signal GND</text>
+      <text x="756" y="397">D- / -</text>
+    </g>
+    <g stroke-width="5" fill="none">
+      <path d="M342 230 H718" stroke="#a45808"/>
+      <path d="M342 310 H718" stroke="#52657a" stroke-dasharray="10 7"/>
+      <path d="M342 390 H718" stroke="#1a744b"/>
+    </g>
+    <g fill="#fff" stroke-width="3">
+      <circle cx="342" cy="230" r="7" stroke="#a45808"/><circle cx="718" cy="230" r="7" stroke="#a45808"/>
+      <circle cx="342" cy="310" r="7" stroke="#52657a"/><circle cx="718" cy="310" r="7" stroke="#52657a"/>
+      <circle cx="342" cy="390" r="7" stroke="#1a744b"/><circle cx="718" cy="390" r="7" stroke="#1a744b"/>
+    </g>
+    <g text-anchor="middle" font-size="16">
+      <text x="530" y="216">D+ to D+</text>
+      <text x="530" y="296">Signal ground</text>
+      <text x="530" y="376">D- to D-</text>
+    </g>
+    <path d="M870 436 V465" stroke="#52657a" stroke-width="4"/>
+    <text x="870" y="490" text-anchor="middle" font-size="17">USB to Pi or Home Assistant host</text>
+    <g font-size="16">
+      <text x="42" y="474" font-weight="700">Do not connect pins 4-8 to the adapter.</text>
+      <text x="42" y="500">Pins 7 and 8 are MB3, for boiler-to-boiler use.</text>
+      <text x="42" y="541" font-weight="700" fill="#8b2927">This RJ45 connection is not Ethernet. Do not connect network or PoE equipment.</text>
+    </g>
+  </g>
+</svg>

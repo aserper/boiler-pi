@@ -75,6 +75,57 @@
       },
       "stack_temperature": {
         "name": "Stack temperature"
+      },
+      "dhw_heat_demand": {
+        "name": "DHW heat demand (raw 0/1)"
+      },
+      "ch1_heat_demand": {
+        "name": "CH1 heat demand (raw 0/1)"
+      },
+      "ch2_heat_demand": {
+        "name": "CH2 heat demand (raw 0/1)"
+      },
+      "hold_code": {
+        "name": "Hold code (raw)"
+      },
+      "lockout_code": {
+        "name": "Lockout code (raw)"
+      },
+      "demand_source": {
+        "name": "Demand source (raw code)"
+      },
+      "flame_signal": {
+        "name": "Flame signal"
+      },
+      "fan_speed_demanded": {
+        "name": "Fan speed demanded"
+      },
+      "fan_speed_feedback": {
+        "name": "Fan speed feedback"
+      },
+      "pump_a_status": {
+        "name": "Pump A system status (raw 0/1)"
+      },
+      "pump_b_status": {
+        "name": "Pump B boiler status (raw 0/1)"
+      },
+      "pump_c_status": {
+        "name": "Pump C DHW status (raw 0/1)"
+      },
+      "burner_run_time_hours": {
+        "name": "Burner run time"
+      },
+      "burner_cycle_count": {
+        "name": "Burner cycles"
+      },
+      "pump_a_cycles": {
+        "name": "Pump A cycles"
+      },
+      "pump_b_cycles": {
+        "name": "Pump B cycles"
+      },
+      "pump_c_cycles": {
+        "name": "Pump C cycles"
       }
     }
   }

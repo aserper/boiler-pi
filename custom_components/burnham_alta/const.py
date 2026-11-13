@@ -11,9 +11,23 @@ NAME = "Burnham ALTA"
 MANUFACTURER = "Burnham"
 MODEL = "ALTA"
 
-# One coordinated read covers HR 13..20, the range observed in the field.
-READ_START_ADDRESS = 13
-READ_REGISTER_COUNT = 8
+# Read-only function-03 blocks, as (start address, register count).  The
+# manual's HR number is the literal zero-based wire address on the observed
+# boiler.  The first block preserves the original HR 13..20 read; the other
+# blocks add the documented diagnostics.  Contiguous documented ranges are
+# grouped; the only undocumented addresses read are HR 15 and 19, which sit
+# inside the original HR 13..20 block and are not decoded.  A poll therefore
+# makes len(READ_BLOCKS) short FC03 transactions rather than one.
+READ_BLOCKS: tuple[tuple[int, int], ...] = (
+    (13, 8),   # burner state 13, setpoint 14, supply/return/DHW/stack 16..20
+    (3, 1),    # DHW heat demand
+    (9, 2),    # CH1 and CH2 heat demand
+    (24, 6),   # burner run time 24-25, cycles 26-27, hold 28, lockout 29
+    (100, 2),  # demand source, flame signal
+    (103, 2),  # fan speed demanded and feedback
+    (106, 3),  # pump A/B/C status
+    (686, 6),  # pump A/B/C cycle counts
+)
 
 # Polling is configurable from the integration's Configure dialog.  The
 # default matches the original fixed interval; the bounds keep a typo or a

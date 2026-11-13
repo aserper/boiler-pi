@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class BurnhamAltaCoordinator(DataUpdateCoordinator[Snapshot]):
-    """Fetch one HR 13..20 snapshot per polling interval."""
+    """Fetch one snapshot of the documented blocks per polling interval."""
 
     def __init__(
         self,

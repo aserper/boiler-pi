@@ -1,21 +1,15 @@
 """Read-only sensors for the Burnham ALTA integration.
 
-Only the six points supported by the field capture and the manual's table 4-4
-are created.  The target dashboard also mentions demand source, flame signal,
-fan RPM, hold/lockout, pump/demand states, runtime/cycles and history.  None of
-those has a validated register mapping, so no entity is created for them and
-none is given a placeholder value.
+Only values documented in the manufacturer's table 4-4 are created.  Raw codes
+are deliberately not translated: the manual and the manufacturer's ProtoAir
+point list disagree about some enum numbering, and no label has been validated
+against the boiler display.  A dashboard can therefore show the number but
+must not pretend to know its name.
 
-The entity keys below are deliberately stable and dashboard-friendly.  Future
-entities should reuse the same naming convention and be added only with a
-confirmed register and unit.  Reserved keys (not implemented):
-
-    demand_source, flame_signal, fan_speed, hold_state, lockout_state,
-    pump_state, demand_state, runtime_hours, cycle_count
-
-``supply_return_delta`` is also reserved: it can be derived from two sensors,
-but the supply/return labels have not been independently confirmed against the
-boiler display, so the integration does not publish a delta yet.
+``0x7FFF`` is exposed as unavailable only for temperatures, as in the decoder.
+``supply_return_delta`` is not published: the supply/return labels have not
+been independently confirmed against the boiler display, so a derived delta
+would imply more certainty than exists.
 """
 
 from __future__ import annotations
@@ -29,7 +23,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -52,8 +46,10 @@ _TEMPERATURE_DESCRIPTION: dict[str, Any] = {
     "suggested_display_precision": 0,
 }
 
-# Only confidently supported readings are listed.  Burner control state is a
-# raw integer; its enum labels are not validated and must not be translated.
+# Only documented table 4-4 readings are listed.  Raw codes are plain integers:
+# their enum labels are not validated and must not be translated.  The fan
+# unit is a literal rpm string because Home Assistant treats it as a custom
+# unit; the manual describes the value as blower speed in rpm.
 SENSOR_SPECS: tuple[tuple[Register, SensorEntityDescription], ...] = (
     (
         Register.BURNER_CONTROL_STATE,
@@ -101,6 +97,159 @@ SENSOR_SPECS: tuple[tuple[Register, SensorEntityDescription], ...] = (
             key="stack_temperature",
             translation_key="stack_temperature",
             **_TEMPERATURE_DESCRIPTION,
+        ),
+    ),
+    (
+        Register.DHW_HEAT_DEMAND,
+        SensorEntityDescription(
+            key="dhw_heat_demand",
+            translation_key="dhw_heat_demand",
+            icon="mdi:water-boiler",
+        ),
+    ),
+    (
+        Register.CH1_HEAT_DEMAND,
+        SensorEntityDescription(
+            key="ch1_heat_demand",
+            translation_key="ch1_heat_demand",
+            icon="mdi:radiator",
+        ),
+    ),
+    (
+        Register.CH2_HEAT_DEMAND,
+        SensorEntityDescription(
+            key="ch2_heat_demand",
+            translation_key="ch2_heat_demand",
+            icon="mdi:radiator",
+        ),
+    ),
+    (
+        Register.HOLD_CODE,
+        SensorEntityDescription(
+            key="hold_code",
+            translation_key="hold_code",
+            icon="mdi:pause-circle-outline",
+        ),
+    ),
+    (
+        Register.LOCKOUT_CODE,
+        SensorEntityDescription(
+            key="lockout_code",
+            translation_key="lockout_code",
+            icon="mdi:alert-octagon-outline",
+        ),
+    ),
+    (
+        Register.DEMAND_SOURCE,
+        SensorEntityDescription(
+            key="demand_source",
+            translation_key="demand_source",
+            icon="mdi:source-branch",
+        ),
+    ),
+    (
+        Register.FLAME_SIGNAL,
+        SensorEntityDescription(
+            key="flame_signal",
+            translation_key="flame_signal",
+            icon="mdi:fire",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement=PERCENTAGE,
+            suggested_display_precision=0,
+        ),
+    ),
+    (
+        Register.FAN_SPEED_DEMANDED,
+        SensorEntityDescription(
+            key="fan_speed_demanded",
+            translation_key="fan_speed_demanded",
+            icon="mdi:fan",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement="rpm",
+            suggested_display_precision=0,
+        ),
+    ),
+    (
+        Register.FAN_SPEED_FEEDBACK,
+        SensorEntityDescription(
+            key="fan_speed_feedback",
+            translation_key="fan_speed_feedback",
+            icon="mdi:fan",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement="rpm",
+            suggested_display_precision=0,
+        ),
+    ),
+    (
+        Register.PUMP_A_STATUS,
+        SensorEntityDescription(
+            key="pump_a_status",
+            translation_key="pump_a_status",
+            icon="mdi:pump",
+        ),
+    ),
+    (
+        Register.PUMP_B_STATUS,
+        SensorEntityDescription(
+            key="pump_b_status",
+            translation_key="pump_b_status",
+            icon="mdi:pump",
+        ),
+    ),
+    (
+        Register.PUMP_C_STATUS,
+        SensorEntityDescription(
+            key="pump_c_status",
+            translation_key="pump_c_status",
+            icon="mdi:pump",
+        ),
+    ),
+    (
+        Register.BURNER_RUN_TIME_HOURS,
+        SensorEntityDescription(
+            key="burner_run_time_hours",
+            translation_key="burner_run_time_hours",
+            icon="mdi:timer-outline",
+            device_class=SensorDeviceClass.DURATION,
+            state_class=SensorStateClass.TOTAL_INCREASING,
+            native_unit_of_measurement=UnitOfTime.HOURS,
+            suggested_display_precision=0,
+        ),
+    ),
+    (
+        Register.BURNER_CYCLE_COUNT,
+        SensorEntityDescription(
+            key="burner_cycle_count",
+            translation_key="burner_cycle_count",
+            icon="mdi:counter",
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+    ),
+    (
+        Register.PUMP_A_CYCLES,
+        SensorEntityDescription(
+            key="pump_a_cycles",
+            translation_key="pump_a_cycles",
+            icon="mdi:counter",
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+    ),
+    (
+        Register.PUMP_B_CYCLES,
+        SensorEntityDescription(
+            key="pump_b_cycles",
+            translation_key="pump_b_cycles",
+            icon="mdi:counter",
+            state_class=SensorStateClass.TOTAL_INCREASING,
+        ),
+    ),
+    (
+        Register.PUMP_C_CYCLES,
+        SensorEntityDescription(
+            key="pump_c_cycles",
+            translation_key="pump_c_cycles",
+            icon="mdi:counter",
+            state_class=SensorStateClass.TOTAL_INCREASING,
         ),
     ),
 )
@@ -163,7 +312,7 @@ class BurnhamAltaSensor(
 
     @property
     def available(self) -> bool:
-        """Unavailable on transport failure or a 0x7FFF sensor sentinel."""
+        """Unavailable on transport failure, a failed block, or 0x7FFF."""
         return (
             super().available
             and self._reading is not None
@@ -171,12 +320,25 @@ class BurnhamAltaSensor(
         )
 
     @property
-    def extra_state_attributes(self) -> dict[str, int | str] | None:
-        """Expose the wire address and raw value for diagnosis."""
+    def extra_state_attributes(
+        self,
+    ) -> dict[str, int | str | list[str]] | None:
+        """Expose the wire address and raw value for diagnosis.
+
+        32-bit counters also expose both raw words in received order, so the
+        provisional high-word-first interpretation can be checked against the
+        wire without a second tool.
+        """
         reading = self._reading
         if reading is None:
             return None
-        return {
+        digits = reading.width // 4
+        attributes: dict[str, int | str | list[str]] = {
             "register": reading.address,
-            "raw_value": f"0x{reading.raw:04X}",
+            "raw_value": f"0x{reading.raw:0{digits}X}",
         }
+        if reading.width > 16:
+            attributes["raw_words"] = [
+                f"0x{word:04X}" for word in reading.raw_words
+            ]
+        return attributes

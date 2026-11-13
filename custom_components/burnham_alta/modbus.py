@@ -2,8 +2,8 @@
 
 There are intentionally no write helpers in this module.  The boiler accepts
 unauthenticated Modbus writes, so the integration only ever calls
-``read_holding_registers``.  A single read of HR 13..20 provides every sensor
-value; Home Assistant's coordinator makes that one read per polling cycle.
+``read_holding_registers``.  Each polling cycle reads the documented blocks in
+``const.READ_BLOCKS`` with function 03; there is no other function code.
 """
 
 from __future__ import annotations
@@ -44,10 +44,9 @@ from .const import (
     MODBUS_RETRIES,
     MODBUS_TIMEOUT,
     NAME,
-    READ_REGISTER_COUNT,
-    READ_START_ADDRESS,
+    READ_BLOCKS,
 )
-from .decoder import Snapshot, decode_registers
+from .decoder import Snapshot, decode_blocks
 
 __all__ = [
     "AltaConnectionError",
@@ -240,8 +239,9 @@ class AltaModbusClient:
     """A serialized, lazily connected, read-only Modbus client.
 
     The coordinator calls :meth:`async_read_snapshot` once per polling cycle.
-    If the transport fails, the client is closed so the next cycle reconnects
-    cleanly.  A lock prevents overlapping reads if a refresh is requested while
+    Every request is a function-03 holding-register read.  If the transport or
+    a frame fails, the client is closed so the next cycle reconnects cleanly.
+    A lock prevents overlapping polling cycles if a refresh is requested while
     one is still in flight.
     """
 
@@ -287,11 +287,19 @@ class AltaModbusClient:
             _LOGGER.debug("Error while closing Modbus client", exc_info=True)
 
     async def async_read_snapshot(self) -> Snapshot:
-        """Perform exactly one function-03 read of HR 13..20.
+        """Perform the configured function-03 reads for one polling cycle.
 
-        Raises :class:`AltaConnectionError` when the transport fails and
-        :class:`AltaModbusError` / :class:`AltaResponseError` when the device
-        replies with an error or an unexpected payload.
+        Blocks are read sequentially.  A Modbus exception response fails only
+        that block; the remaining blocks are still attempted.  A transport
+        failure or malformed frame closes the client and stops the cycle,
+        because continuing would send requests into an unknown stream state.
+        The next cycle reconnects cleanly.
+
+        If at least one block succeeded, a partial snapshot is returned rather
+        than discarding good readings; missing readings make only their own
+        entities unavailable.  If no block succeeded, the first error is raised
+        as :class:`AltaConnectionError`, :class:`AltaModbusError` or
+        :class:`AltaResponseError`.
         """
         async with self._lock:
             client = self._ensure_client()
@@ -313,56 +321,105 @@ class AltaModbusClient:
                         "Could not connect to the Modbus device"
                     )
 
-            try:
-                response = await client.read_holding_registers(
-                    READ_START_ADDRESS,
-                    count=READ_REGISTER_COUNT,
-                    device_id=self._config[CONF_DEVICE_ID],
-                )
-            except asyncio.CancelledError:
-                self.close()
-                raise
-            except Exception as err:
-                self.close()
-                raise AltaConnectionError(
-                    f"Modbus read failed: {err}"
-                ) from err
+            blocks: list[tuple[int, tuple[int, ...]]] = []
+            block_errors: dict[tuple[int, int], str] = {}
+            first_error: AltaError | None = None
+            device_id = self._config[CONF_DEVICE_ID]
 
-            is_error = getattr(response, "isError", None)
-            if callable(is_error) and is_error():
-                raise AltaModbusError(
-                    f"Modbus device returned an error response: {response}"
-                )
+            for start, count in READ_BLOCKS:
+                key = (start, count)
+                try:
+                    response = await client.read_holding_registers(
+                        start,
+                        count=count,
+                        device_id=device_id,
+                    )
+                except asyncio.CancelledError:
+                    self.close()
+                    raise
+                except Exception as err:
+                    # The stream may now be desynchronised.  Stop this cycle
+                    # and close so the next poll reconnects from scratch.
+                    self.close()
+                    error = AltaConnectionError(
+                        f"Modbus read of HR {start} ({count} registers) "
+                        f"failed: {err}"
+                    )
+                    block_errors[key] = str(error)
+                    if first_error is None:
+                        first_error = error
+                    break
 
-            registers = getattr(response, "registers", None)
-            if registers is None:
-                self.close()
+                is_error = getattr(response, "isError", None)
+                if callable(is_error) and is_error():
+                    # The device answered, so the transport is usable.  Mark
+                    # only this block failed and keep reading the others.
+                    error = AltaModbusError(
+                        f"Modbus device returned an error response for "
+                        f"HR {start} ({count} registers): {response}"
+                    )
+                    block_errors[key] = str(error)
+                    if first_error is None:
+                        first_error = error
+                    continue
+
+                registers = getattr(response, "registers", None)
+                if registers is None:
+                    self.close()
+                    error = AltaResponseError(
+                        f"Modbus response for HR {start} did not contain a "
+                        "register block"
+                    )
+                    block_errors[key] = str(error)
+                    if first_error is None:
+                        first_error = error
+                    break
+
+                values = tuple(registers)
+                if len(values) != count:
+                    self.close()
+                    error = AltaResponseError(
+                        f"expected {count} registers from address {start}, "
+                        f"got {len(values)}"
+                    )
+                    block_errors[key] = str(error)
+                    if first_error is None:
+                        first_error = error
+                    break
+
+                blocks.append((start, values))
+
+            if not blocks:
+                if first_error is not None:
+                    raise first_error
                 raise AltaResponseError(
-                    "Modbus response did not contain a register block"
+                    "Modbus device returned no readable register blocks"
                 )
 
-            values = tuple(registers)
-            if len(values) != READ_REGISTER_COUNT:
-                self.close()
-                raise AltaResponseError(
-                    f"expected {READ_REGISTER_COUNT} registers from "
-                    f"address {READ_START_ADDRESS}, got {len(values)}"
+            if block_errors:
+                _LOGGER.debug(
+                    "Burnham ALTA returned a partial snapshot; failed blocks: %s",
+                    ", ".join(
+                        f"{start}+{count}" for start, count in block_errors
+                    ),
                 )
 
             try:
-                return decode_registers(READ_START_ADDRESS, values)
+                return decode_blocks(blocks, block_errors=block_errors)
             except (TypeError, ValueError) as err:
                 self.close()
                 raise AltaResponseError(
-                    f"could not decode the register block: {err}"
+                    f"could not decode the register blocks: {err}"
                 ) from err
 
 
 async def validate_connection(config: Mapping[str, Any]) -> Snapshot:
-    """Open a temporary connection and read the boiler once.
+    """Open a temporary connection and perform one read-only polling cycle.
 
     Used by the config flow so an entry is only created for a device that
-    actually answers a read.  The temporary client is always closed.
+    answers at least one documented block.  A device whose diagnostics block
+    fails but whose primary block answers still validates; the temporary
+    client is always closed.
     """
     client = AltaModbusClient(config)
     try:

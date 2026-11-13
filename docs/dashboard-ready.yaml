@@ -1,0 +1,159 @@
+# Burnham ALTA read-only dashboard for HA 2026.10.1+.
+# Replace every sensor.ALTA_<KEY> with its entity from the integration's device
+# page. Keys in this template do NOT guarantee the final HA-generated entity ID.
+# Native cards; select a dark HA theme for the reference's intended appearance.
+# CH1 / CH2 floor associations must be confirmed before renaming them by floor.
+title: Burnham ALTA Boiler
+views:
+  - title: Boiler
+    path: boiler
+    icon: mdi:fire
+    type: sections
+    max_columns: 3
+    dense_section_placement: false
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Burnham ALTA Boiler
+            heading_style: title
+            icon: mdi:fire
+          - type: markdown
+            content: |
+              **Read-only monitoring** · 10-second default refresh
+
+              {% set keys = ['sensor.ALTA_SUPPLY_TEMPERATURE', 'sensor.ALTA_RETURN_TEMPERATURE', 'sensor.ALTA_BURNER_CONTROL_STATE', 'sensor.ALTA_HOLD_CODE', 'sensor.ALTA_LOCKOUT_CODE'] %}
+              {% set ns = namespace(count=0) %}
+              {% for key in keys %}{% if has_value(key) %}{% set ns.count = ns.count + 1 %}{% endif %}{% endfor %}
+              {% if ns.count == 0 %}**Data unavailable.** Check the integration and gateway.
+              {% elif ns.count < 5 %}**Partial readings.** Missing values are unknown, not normal.
+              {% else %}**Receiving data.** Available readings do not guarantee fault-free operation.{% endif %}
+          - type: heading
+            heading: Overview
+            icon: mdi:gauge
+          - type: tile
+            entity: sensor.ALTA_SUPPLY_TEMPERATURE
+            name: Supply temperature
+            icon: mdi:thermometer-chevron-up
+          - type: tile
+            entity: sensor.ALTA_RETURN_TEMPERATURE
+            name: Return temperature
+            icon: mdi:thermometer-chevron-down
+          - type: tile
+            entity: sensor.ALTA_TARGET_TEMPERATURE
+            name: Target temperature
+            icon: mdi:thermostat
+          - type: markdown
+            content: |
+              {% set s = states('sensor.ALTA_SUPPLY_TEMPERATURE') %}
+              {% set r = states('sensor.ALTA_RETURN_TEMPERATURE') %}
+              {% set u = state_attr('sensor.ALTA_SUPPLY_TEMPERATURE', 'unit_of_measurement') %}
+              {% if is_number(s) and is_number(r) and u and u == state_attr('sensor.ALTA_RETURN_TEMPERATURE', 'unit_of_measurement') %}
+              ### ΔT {{ ((s | float) - (r | float)) | round(1) }} {{ u }}
+              Supply minus return. Calculated from current readings.
+              {% else %}**ΔT unavailable** — both temperatures must be available in the same unit.{% endif %}
+          - type: entities
+            title: Other temperatures
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ALTA_STACK_TEMPERATURE
+                name: Stack / exhaust
+              - entity: sensor.ALTA_DHW_TEMPERATURE
+                name: Domestic hot water
+      - type: grid
+        cards:
+          - type: heading
+            heading: Status
+            icon: mdi:list-status
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ALTA_BURNER_CONTROL_STATE
+                name: Burner state code
+              - entity: sensor.ALTA_DEMAND_SOURCE
+                name: Active demand source code
+              - entity: sensor.ALTA_FLAME_SIGNAL
+                name: Flame signal
+              - entity: sensor.ALTA_FAN_SPEED_FEEDBACK
+                name: Fan speed
+              - entity: sensor.ALTA_FAN_SPEED_DEMANDED
+                name: Requested fan speed
+          - type: heading
+            heading: Heat demand
+            icon: mdi:radiator
+          - type: markdown
+            content: |
+              | Consumer | Calling for heat |
+              | :--- | ---: |
+              {% for label, entity in [('Domestic hot water', 'sensor.ALTA_DHW_HEAT_DEMAND'), ('Central heat 1', 'sensor.ALTA_CH1_HEAT_DEMAND'), ('Central heat 2', 'sensor.ALTA_CH2_HEAT_DEMAND')] %}
+              | {{ label }} | {% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %} |
+              {% endfor %}
+
+              A demand is a call for heat, not proof of burner operation.
+          - type: heading
+            heading: Pumps
+            icon: mdi:pump
+          - type: markdown
+            content: |
+              | Pump | Reported status |
+              | :--- | ---: |
+              {% for label, entity in [('System · A', 'sensor.ALTA_PUMP_A_STATUS'), ('Boiler · B', 'sensor.ALTA_PUMP_B_STATUS'), ('DHW · C', 'sensor.ALTA_PUMP_C_STATUS')] %}
+              | {{ label }} | {% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %} |
+              {% endfor %}
+          - type: heading
+            heading: Diagnostics
+            icon: mdi:alert-outline
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ALTA_HOLD_CODE
+                name: Hold code
+              - entity: sensor.ALTA_LOCKOUT_CODE
+                name: Lockout code
+          - type: markdown
+            content: |
+              {% set hold = states('sensor.ALTA_HOLD_CODE') %}
+              {% set lockout = states('sensor.ALTA_LOCKOUT_CODE') %}
+              {% if not is_number(hold) or not is_number(lockout) %}
+              **Diagnostic data unavailable.** Do not interpret missing codes as zero.
+              {% elif (hold | int) != 0 or (lockout | int) != 0 %}
+              **A hold or lockout code is present.** Consult the boiler display and manufacturer's instructions.
+              {% else %}Both reported codes are zero. This is not a comprehensive safety check.{% endif %}
+      - type: grid
+        cards:
+          - type: heading
+            heading: Temperature trend
+            icon: mdi:chart-line
+          - type: history-graph
+            hours_to_show: 6
+            entities:
+              - entity: sensor.ALTA_SUPPLY_TEMPERATURE
+                name: Supply
+              - entity: sensor.ALTA_RETURN_TEMPERATURE
+                name: Return
+              - entity: sensor.ALTA_TARGET_TEMPERATURE
+                name: Target
+          - type: heading
+            heading: Lifetime statistics
+            icon: mdi:chart-bar
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ALTA_BURNER_RUN_TIME_HOURS
+                name: Burner runtime
+              - entity: sensor.ALTA_BURNER_CYCLE_COUNT
+                name: Burner cycles
+              - entity: sensor.ALTA_PUMP_A_CYCLES
+                name: System pump cycles
+              - entity: sensor.ALTA_PUMP_B_CYCLES
+                name: Boiler pump cycles
+              - entity: sensor.ALTA_PUMP_C_CYCLES
+                name: DHW pump cycles
+          - type: markdown
+            content: |
+              **Reading this dashboard**
+
+              Polling is configurable in the integration's Configure screen.
+              State codes remain numeric; counter word order and unavailable-temperature handling are provisional.
+              Supply and return labels follow the manual and have not been individually compared with the display.
+              This dashboard is not a boiler safety control.

@@ -1,7 +1,7 @@
 """Read-only Home Assistant integration for a Burnham ALTA boiler.
 
-The integration performs one Modbus function-03 read of holding registers
-13..20 per polling cycle and exposes the modelled values as sensors.  It does
+The integration reads documented holding-register blocks with Modbus
+function 03 per polling cycle and exposes the modelled values as sensors. It does
 not create writable entities or services, and it never calls a Modbus write
 function.
 """

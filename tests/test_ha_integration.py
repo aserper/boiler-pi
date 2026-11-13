@@ -31,6 +31,46 @@ if str(REPO_ROOT) not in sys.path:
 
 CAPTURE_RAW = (0x0001, 0x008C, 0x7FFF, 0x0079, 0x0078, 0x7FFF, 0x0000, 0x005C)
 
+# Responses keyed by the requested (address, count).  The HR 13 block is the
+# original field capture; the remaining values are from the 2026-11-13 live
+# read-only capture.  HR 24..29 combines the captured 24..27 and 28..29 reads.
+LIVE_READ_RESPONSES: dict[tuple[int, int], tuple[int, ...]] = {
+    (13, 8): CAPTURE_RAW,
+    (3, 1): (0x0000,),
+    (9, 2): (0x0000, 0x0000),
+    (24, 6): (0x0000, 0x0017, 0x0000, 0x011C, 0x0000, 0x0000),
+    (100, 2): (0x0001, 0x0000),
+    (103, 2): (0x0000, 0x0000),
+    (106, 3): (0x0000, 0x0000, 0x0000),
+    (686, 6): (0x0000, 0x010B, 0x0000, 0x0199, 0x0000, 0x0018),
+}
+
+EXPECTED_SENSOR_KEYS = {
+    "burner_control_state",
+    "target_temperature",
+    "supply_temperature",
+    "return_temperature",
+    "dhw_temperature",
+    "stack_temperature",
+    "dhw_heat_demand",
+    "ch1_heat_demand",
+    "ch2_heat_demand",
+    "hold_code",
+    "lockout_code",
+    "demand_source",
+    "flame_signal",
+    "fan_speed_demanded",
+    "fan_speed_feedback",
+    "pump_a_status",
+    "pump_b_status",
+    "pump_c_status",
+    "burner_run_time_hours",
+    "burner_cycle_count",
+    "pump_a_cycles",
+    "pump_b_cycles",
+    "pump_c_cycles",
+}
+
 # ---------------------------------------------------------------------------
 # Contract fakes
 # ---------------------------------------------------------------------------
@@ -72,7 +112,12 @@ class FakeModbusClient:
         self.connect_calls = 0
         self.close_calls = 0
         self.read_calls: list[dict[str, int]] = []
-        self.response = FakeResponse(CAPTURE_RAW)
+        self.responses: dict[tuple[int, int], FakeResponse] = {
+            key: FakeResponse(values)
+            for key, values in LIVE_READ_RESPONSES.items()
+        }
+        self.error_reads: set[tuple[int, int]] = set()
+        self.fail_reads: dict[tuple[int, int], BaseException] = {}
         self.read_exception: BaseException | None = None
 
     @property
@@ -97,8 +142,16 @@ class FakeModbusClient:
         )
         if self.read_exception is not None:
             raise self.read_exception
-        assert self.response is not None
-        return self.response
+        key = (address, count)
+        failure = self.fail_reads.get(key)
+        if failure is not None:
+            raise failure
+        if key in self.error_reads:
+            return FakeResponse(error=True)
+        response = self.responses.get(key)
+        if response is None:
+            return FakeResponse(())
+        return response
 
     def close(self) -> None:
         self.close_calls += 1
@@ -132,10 +185,19 @@ class UnitOfTemperature(str, Enum):
     FAHRENHEIT = "°F"
 
 
+class UnitOfTime(str, Enum):
+    HOURS = "h"
+
+
+PERCENTAGE = "%"
+
+
 _ha_const = _module(
     "homeassistant.const",
     Platform=Platform,
+    PERCENTAGE=PERCENTAGE,
     UnitOfTemperature=UnitOfTemperature,
+    UnitOfTime=UnitOfTime,
     MAJOR_VERSION=2026,
     MINOR_VERSION=11,
     PATCH_VERSION="1",
@@ -459,11 +521,13 @@ _ha_helpers.entity_platform = _ha_entity_platform
 
 # components.sensor
 class SensorDeviceClass(str, Enum):
+    DURATION = "duration"
     TEMPERATURE = "temperature"
 
 
 class SensorStateClass(str, Enum):
     MEASUREMENT = "measurement"
+    TOTAL_INCREASING = "total_increasing"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -677,10 +741,12 @@ from custom_components.burnham_alta.const import (  # noqa: E402
     DOMAIN,
     MAX_SCAN_INTERVAL_SECONDS,
     MIN_SCAN_INTERVAL_SECONDS,
+    READ_BLOCKS,
 )
 from custom_components.burnham_alta.coordinator import BurnhamAltaCoordinator  # noqa: E402
 from custom_components.burnham_alta.decoder import (  # noqa: E402
     Register,
+    decode_blocks,
     decode_registers,
 )
 from custom_components.burnham_alta.modbus import (  # noqa: E402
@@ -695,7 +761,11 @@ from custom_components.burnham_alta.modbus import (  # noqa: E402
     validate_connection,
 )
 
-SNAPSHOT = decode_registers(13, CAPTURE_RAW)
+LIVE_BLOCKS = tuple(
+    (address, values)
+    for (address, _count), values in LIVE_READ_RESPONSES.items()
+)
+SNAPSHOT = decode_blocks(LIVE_BLOCKS)
 CONFIG_TCP = {
     CONF_CONNECTION_TYPE: CONNECTION_TCP,
     CONF_HOST: "192.0.2.10",
@@ -796,7 +866,7 @@ class ModbusClientTests(unittest.IsolatedAsyncioTestCase):
             subject = AltaModbusClient(CONFIG_TCP)
         self.assertIsNone(subject.client)
 
-    async def test_one_read_of_hr_13_through_20(self):
+    async def test_every_documented_block_is_requested_once(self):
         fake = FakeTcpClient()
         subject = AltaModbusClient(CONFIG_TCP, client=fake)
 
@@ -805,13 +875,24 @@ class ModbusClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.connect_calls, 1)
         self.assertEqual(
             fake.read_calls,
-            [{"address": 13, "count": 8, "device_id": 1}],
+            [
+                {"address": address, "count": count, "device_id": 1}
+                for address, count in READ_BLOCKS
+            ],
         )
         self.assertEqual(
             snapshot.readings[Register.SUPPLY_TEMPERATURE].value, 121
         )
         self.assertEqual(snapshot.readings[Register.RETURN_TEMPERATURE].value, 120)
         self.assertIsNone(snapshot.readings[Register.DHW_TEMPERATURE].value)
+        self.assertEqual(
+            snapshot.readings[Register.BURNER_RUN_TIME_HOURS].value, 23
+        )
+        self.assertEqual(snapshot.readings[Register.BURNER_CYCLE_COUNT].value, 284)
+        self.assertEqual(snapshot.readings[Register.PUMP_A_CYCLES].value, 267)
+        self.assertEqual(snapshot.readings[Register.PUMP_B_CYCLES].value, 409)
+        self.assertEqual(snapshot.readings[Register.PUMP_C_CYCLES].value, 24)
+        self.assertEqual(snapshot.block_errors, {})
         self.assertEqual(fake.close_calls, 0)
 
     async def test_cancelled_connect_closes_transport(self):
@@ -856,7 +937,7 @@ class ModbusClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_modbus_error_response(self):
         fake = FakeTcpClient()
-        fake.response = FakeResponse(error=True)
+        fake.error_reads.update(LIVE_READ_RESPONSES)
         subject = AltaModbusClient(CONFIG_TCP, client=fake)
 
         with self.assertRaises(AltaModbusError):
@@ -864,7 +945,7 @@ class ModbusClientTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_short_response_is_rejected(self):
         fake = FakeTcpClient()
-        fake.response = FakeResponse(CAPTURE_RAW[:3])
+        fake.responses[(13, 8)] = FakeResponse(CAPTURE_RAW[:3])
         subject = AltaModbusClient(CONFIG_TCP, client=fake)
 
         with self.assertRaises(AltaResponseError):
@@ -881,7 +962,58 @@ class ModbusClientTests(unittest.IsolatedAsyncioTestCase):
             factory.assert_called_once()
 
         self.assertEqual(snapshot.readings[Register.STACK_TEMPERATURE].value, 92)
+        self.assertEqual(snapshot.readings[Register.DEMAND_SOURCE].value, 1)
+        self.assertEqual(len(fake.read_calls), len(READ_BLOCKS))
         self.assertEqual(fake.close_calls, 1)
+
+
+    async def test_one_error_block_returns_partial_snapshot(self):
+        fake = FakeTcpClient()
+        fake.error_reads.add((686, 6))
+        subject = AltaModbusClient(CONFIG_TCP, client=fake)
+
+        snapshot = await subject.async_read_snapshot()
+
+        self.assertIn(Register.SUPPLY_TEMPERATURE, snapshot.readings)
+        self.assertIn(Register.BURNER_CYCLE_COUNT, snapshot.readings)
+        self.assertNotIn(Register.PUMP_A_CYCLES, snapshot.readings)
+        self.assertEqual(snapshot.failed_blocks, {(686, 6)})
+        self.assertIn((686, 6), snapshot.block_errors)
+        # A Modbus exception response is not a transport failure: keep the
+        # connection and read every other block.
+        self.assertEqual(fake.close_calls, 0)
+        self.assertEqual(
+            [call["address"] for call in fake.read_calls],
+            [address for address, _ in READ_BLOCKS],
+        )
+
+    async def test_transport_failure_mid_cycle_keeps_earlier_blocks(self):
+        fake = FakeTcpClient()
+        fake.fail_reads[(100, 2)] = OSError("link down")
+        subject = AltaModbusClient(CONFIG_TCP, client=fake)
+
+        snapshot = await subject.async_read_snapshot()
+
+        self.assertIn(Register.SUPPLY_TEMPERATURE, snapshot.readings)
+        self.assertIn(Register.BURNER_RUN_TIME_HOURS, snapshot.readings)
+        self.assertNotIn(Register.DEMAND_SOURCE, snapshot.readings)
+        self.assertNotIn(Register.PUMP_A_CYCLES, snapshot.readings)
+        self.assertEqual(snapshot.failed_blocks, {(100, 2)})
+        self.assertEqual(
+            [call["address"] for call in fake.read_calls],
+            [13, 3, 9, 24, 100],
+        )
+        self.assertEqual(fake.close_calls, 1)
+        self.assertIsNone(subject.client)
+
+        # The next cycle reconnects and reads the full sequence again.
+        fake.fail_reads.clear()
+        with patch.object(modbus_module, "create_client", return_value=fake):
+            snapshot = await subject.async_read_snapshot()
+        self.assertEqual(fake.connect_calls, 2)
+        self.assertEqual(snapshot.failed_blocks, set())
+        self.assertEqual(snapshot.readings[Register.DEMAND_SOURCE].value, 1)
+        self.assertEqual(len(fake.read_calls), len(READ_BLOCKS) + 5)
 
 
 class ConfigFlowTests(unittest.IsolatedAsyncioTestCase):
@@ -1107,7 +1239,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         coordinator = BurnhamAltaCoordinator(hass, entry, client)
         return coordinator, fake
 
-    async def test_first_refresh_reads_once(self):
+    async def test_first_refresh_reads_every_block(self):
         coordinator, fake = await self._coordinator()
         await coordinator.async_config_entry_first_refresh()
 
@@ -1119,14 +1251,14 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
             coordinator.update_interval,
             timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS),
         )
-        self.assertEqual(len(fake.read_calls), 1)
+        self.assertEqual(len(fake.read_calls), len(READ_BLOCKS))
 
     async def test_options_set_the_polling_interval(self):
         coordinator, fake = await self._coordinator({CONF_SCAN_INTERVAL: 30})
         await coordinator.async_config_entry_first_refresh()
 
         self.assertEqual(coordinator.update_interval, timedelta(seconds=30))
-        self.assertEqual(len(fake.read_calls), 1)
+        self.assertEqual(len(fake.read_calls), len(READ_BLOCKS))
 
     async def test_bounds_are_accepted(self):
         for seconds in (MIN_SCAN_INTERVAL_SECONDS, MAX_SCAN_INTERVAL_SECONDS):
@@ -1159,13 +1291,13 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                 )
                 await coordinator.async_config_entry_first_refresh()
                 self.assertIsNotNone(coordinator.data)
-                self.assertEqual(len(fake.read_calls), 1)
+                self.assertEqual(len(fake.read_calls), len(READ_BLOCKS))
 
-    async def test_each_refresh_is_one_read(self):
+    async def test_each_refresh_reads_every_block_once(self):
         coordinator, fake = await self._coordinator()
         await coordinator.async_config_entry_first_refresh()
         await coordinator.async_refresh()
-        self.assertEqual(len(fake.read_calls), 2)
+        self.assertEqual(len(fake.read_calls), 2 * len(READ_BLOCKS))
 
     async def test_failure_is_config_entry_not_ready(self):
         coordinator, fake = await self._coordinator()
@@ -1176,6 +1308,18 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(coordinator.last_update_success)
         self.assertIsNotNone(coordinator.last_exception)
+
+
+    async def test_partial_block_failure_is_a_successful_update(self):
+        coordinator, fake = await self._coordinator()
+        fake.error_reads.add((100, 2))
+
+        await coordinator.async_config_entry_first_refresh()
+
+        self.assertTrue(coordinator.last_update_success)
+        self.assertIn(Register.SUPPLY_TEMPERATURE, coordinator.data.readings)
+        self.assertNotIn(Register.DEMAND_SOURCE, coordinator.data.readings)
+        self.assertEqual(coordinator.data.failed_blocks, {(100, 2)})
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
@@ -1198,17 +1342,7 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
     async def test_only_supported_entities_are_created(self):
         coordinator, _ = await self._coordinator()
         entities = self._entities(coordinator)
-        self.assertEqual(
-            set(entities),
-            {
-                "burner_control_state",
-                "target_temperature",
-                "supply_temperature",
-                "return_temperature",
-                "dhw_temperature",
-                "stack_temperature",
-            },
-        )
+        self.assertEqual(set(entities), EXPECTED_SENSOR_KEYS)
 
     async def test_values_and_raw_attributes(self):
         coordinator, entry = await self._coordinator()
@@ -1223,6 +1357,32 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entities["supply_temperature"].native_value, 121)
         self.assertEqual(entities["return_temperature"].native_value, 120)
         self.assertEqual(entities["stack_temperature"].native_value, 92)
+        self.assertEqual(entities["ch1_heat_demand"].native_value, 0)
+        self.assertEqual(entities["ch2_heat_demand"].native_value, 0)
+        self.assertEqual(entities["dhw_heat_demand"].native_value, 0)
+        self.assertEqual(entities["hold_code"].native_value, 0)
+        self.assertEqual(entities["lockout_code"].native_value, 0)
+        self.assertEqual(entities["demand_source"].native_value, 1)
+        self.assertEqual(entities["flame_signal"].native_value, 0)
+        self.assertEqual(entities["fan_speed_demanded"].native_value, 0)
+        self.assertEqual(entities["fan_speed_feedback"].native_value, 0)
+        self.assertEqual(entities["pump_a_status"].native_value, 0)
+        self.assertEqual(entities["pump_b_status"].native_value, 0)
+        self.assertEqual(entities["pump_c_status"].native_value, 0)
+        self.assertEqual(entities["burner_run_time_hours"].native_value, 23)
+        self.assertEqual(entities["burner_cycle_count"].native_value, 284)
+        self.assertEqual(entities["pump_a_cycles"].native_value, 267)
+        self.assertEqual(entities["pump_b_cycles"].native_value, 409)
+        self.assertEqual(entities["pump_c_cycles"].native_value, 24)
+
+        self.assertEqual(
+            entities["burner_run_time_hours"].extra_state_attributes,
+            {
+                "register": 24,
+                "raw_value": "0x00000017",
+                "raw_words": ["0x0000", "0x0017"],
+            },
+        )
 
         self.assertEqual(
             entities["supply_temperature"].unique_id,
@@ -1251,13 +1411,29 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(entity.native_value)
         self.assertFalse(entity.available)
 
+    async def test_failed_block_only_disables_its_own_entities(self):
+        coordinator, _ = await self._coordinator()
+        blocks = [
+            (address, values)
+            for address, values in LIVE_BLOCKS
+            if address != 106
+        ]
+        coordinator.data = decode_blocks(
+            blocks, block_errors={(106, 3): "device rejected the block"}
+        )
+        entities = self._entities(coordinator)
+        self.assertFalse(entities["pump_a_status"].available)
+        self.assertIsNone(entities["pump_a_status"].native_value)
+        self.assertTrue(entities["supply_temperature"].available)
+        self.assertTrue(entities["pump_a_cycles"].available)
+
     async def test_coordinator_failure_is_unavailable(self):
         coordinator, _ = await self._coordinator()
         coordinator.last_update_success = False
         entity = self._entities(coordinator)["supply_temperature"]
         self.assertFalse(entity.available)
 
-    async def test_setup_adds_six_entities(self):
+    async def test_setup_adds_all_entities(self):
         coordinator, entry = await self._coordinator()
         hass = FakeHass()
         hass.data[DOMAIN] = {entry.entry_id: coordinator}
@@ -1265,17 +1441,10 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
 
         await sensor_module.async_setup_entry(hass, entry, added.extend)
 
-        self.assertEqual(len(added), 6)
+        self.assertEqual(len(added), len(EXPECTED_SENSOR_KEYS))
         self.assertEqual(
             {entity.entity_description.key for entity in added},
-            {
-                "burner_control_state",
-                "target_temperature",
-                "supply_temperature",
-                "return_temperature",
-                "dhw_temperature",
-                "stack_temperature",
-            },
+            EXPECTED_SENSOR_KEYS,
         )
 
 
@@ -1393,6 +1562,61 @@ class ReadOnlyTests(unittest.TestCase):
                         f"{path.name} calls {node.func.attr}",
                     )
 
+    def test_no_forbidden_modbus_functions_are_named(self):
+        integration_dir = REPO_ROOT / "custom_components" / "burnham_alta"
+        forbidden = (
+            "write_coil",
+            "write_coils",
+            "write_register",
+            "write_registers",
+            "mask_write_register",
+            "read_coils",
+            "read_discrete_inputs",
+            "read_input_registers",
+        )
+        for path in integration_dir.glob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            for name in forbidden:
+                self.assertNotIn(name, source, f"{path.name} names {name}")
+
+    def test_read_blocks_are_the_documented_plan(self):
+        self.assertEqual(
+            READ_BLOCKS,
+            (
+                (13, 8),
+                (3, 1),
+                (9, 2),
+                (24, 6),
+                (100, 2),
+                (103, 2),
+                (106, 3),
+                (686, 6),
+            ),
+        )
+
+    def test_read_blocks_cover_every_modelled_register(self):
+        covered: set[int] = set()
+        for start, count in READ_BLOCKS:
+            self.assertGreater(count, 0)
+            covered.update(range(start, start + count))
+        # Table 4-4 marks HR 1000..1003 as write registers.  They must never
+        # appear in a polling read plan.
+        self.assertEqual(covered & {1000, 1001, 1002, 1003}, set())
+        ordered = sorted(READ_BLOCKS)
+        for block_start, block_count in zip(ordered, ordered[1:]):
+            self.assertLessEqual(
+                block_start[0] + block_start[1],
+                block_count[0],
+                "READ_BLOCKS must not overlap",
+            )
+        for register in Register:
+            for offset in range(register.word_count):
+                self.assertIn(
+                    register.address + offset,
+                    covered,
+                    f"{register.name} is not covered by READ_BLOCKS",
+                )
+
     def test_only_the_sensor_platform_is_loaded(self):
         import custom_components.burnham_alta as integration
 
@@ -1413,7 +1637,7 @@ class ReadOnlyTests(unittest.TestCase):
         )
 
         self.assertTrue(manifest["config_flow"])
-        self.assertEqual(manifest["version"], "0.1.0")
+        self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+$")
         self.assertEqual(
             manifest["requirements"], ["pymodbus==3.13.1", "pyserial>=3.5"]
         )
@@ -1426,15 +1650,7 @@ class ReadOnlyTests(unittest.TestCase):
         self.assertIn(CONF_SCAN_INTERVAL, options["step"]["init"]["data_description"])
         self.assertIn("invalid_scan_interval", options["error"])
         self.assertEqual(
-            set(strings["entity"]["sensor"]),
-            {
-                "burner_control_state",
-                "target_temperature",
-                "supply_temperature",
-                "return_temperature",
-                "dhw_temperature",
-                "stack_temperature",
-            },
+            set(strings["entity"]["sensor"]), EXPECTED_SENSOR_KEYS
         )
 
 

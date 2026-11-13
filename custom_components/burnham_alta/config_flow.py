@@ -5,7 +5,7 @@ Two connection modes are offered:
 * Modbus TCP (MBAP) to a protocol-translating serial gateway.
 * Native Modbus RTU on a local serial port, fixed at 8-N-1.
 
-Both modes perform one read-only function-03 read before the entry is created.
+Both modes perform a read-only polling cycle before the entry is created.
 The flow never writes to the boiler.
 """
 

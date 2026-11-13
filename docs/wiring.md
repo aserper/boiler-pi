@@ -4,6 +4,14 @@ The ALTA uses an RJ45 connector for its RS485 interfaces. Do not plug it into a 
 
 Boilers contain mains voltage. Have a qualified installer make internal connections with boiler power isolated. Check the instructions for your exact boiler and control revision before wiring.
 
+## Find the connection
+
+This control board is inside the boiler enclosure, behind the front-panel display. The red outline marks the left-hand RJ45 jack labeled `XB-1` at the bottom left of the board. The neighboring jack is `XB-2`.
+
+![ALTA control board with the bottom-left XB-1 RJ45 jack highlighted in red](images/alta-control-board-mb2.png)
+
+Photo: [F.W. Webb](https://fwwebbimage.fwwebb.com/WO/Base/1111938-1.jpg), annotated to show the connector. Check your board's labels before connecting the cable; layouts can differ between revisions. Use MB2 pins 1, 2 and 3 as shown below.
+
 ## What you need
 
 - A USB-to-RS485 adapter that supports two-wire, half-duplex RS485 and has a signal-ground terminal. An isolated adapter is preferable. A USB-to-TTL UART adapter is not suitable.

@@ -1,0 +1,81 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to a Burnham ALTA boiler",
+        "description": "Choose how this Home Assistant instance reaches the boiler. The integration is read-only.",
+        "menu_options": {
+          "tcp": "Modbus TCP gateway",
+          "serial": "Direct serial RTU"
+        }
+      },
+      "tcp": {
+        "title": "Modbus TCP gateway",
+        "description": "Enter the host and port of a gateway that translates Modbus TCP (MBAP) to the boiler's RTU link. This integration does not support RTU-over-TCP framing. It sends only function 03 reads.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "device_id": "Modbus unit ID"
+        }
+      },
+      "serial": {
+        "title": "Direct serial RTU",
+        "description": "Enter the serial device path. Prefer the stable /dev/serial/by-id/... path for the adapter (for example the FTDI by-id entry) when one exists; /dev/ttyUSB0 also works. Communication is fixed at 38400 baud, 8 data bits, no parity, 1 stop bit (8-N-1). The integration sends only function 03 reads.",
+        "data": {
+          "serial_port": "Serial port",
+          "baudrate": "Baud rate",
+          "device_id": "Modbus unit ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the boiler or gateway.",
+      "modbus_error": "The Modbus device returned an error response.",
+      "invalid_response": "The device replied, but not with the expected eight registers.",
+      "invalid_config": "The connection settings are invalid.",
+      "unknown": "Unexpected error. Check the Home Assistant log for details."
+    },
+    "abort": {
+      "already_configured": "This boiler connection is already configured."
+    },
+    "options": {
+      "step": {
+        "init": {
+          "title": "Burnham ALTA options",
+          "description": "Choose how often Home Assistant reads the boiler. The integration is read-only.",
+          "data": {
+            "scan_interval": "Polling interval"
+          },
+          "data_description": {
+            "scan_interval": "Seconds between reads, from 5 to 3600. The default is 10 seconds."
+          }
+        }
+      },
+      "error": {
+        "invalid_scan_interval": "Enter a whole number of seconds between 5 and 3600."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "burner_control_state": {
+        "name": "Burner control state"
+      },
+      "target_temperature": {
+        "name": "Target temperature"
+      },
+      "supply_temperature": {
+        "name": "Supply temperature"
+      },
+      "return_temperature": {
+        "name": "Return temperature"
+      },
+      "dhw_temperature": {
+        "name": "DHW temperature"
+      },
+      "stack_temperature": {
+        "name": "Stack temperature"
+      }
+    }
+  }
+}

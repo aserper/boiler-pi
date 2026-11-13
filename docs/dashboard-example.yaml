@@ -1,0 +1,59 @@
+# Example dashboard: replace every sensor.YOUR_* entity with the entity ID
+# created by your Burnham ALTA device in Home Assistant. Uses built-in cards.
+# Select a dark HA theme to approximate the reference design.
+title: Burnham ALTA Boiler
+views:
+  - title: Boiler
+    path: boiler
+    icon: mdi:fire
+    type: masonry
+    cards:
+      - type: markdown
+        content: |
+          # 🔥 Burnham ALTA Boiler
+          Read-only monitoring. A missing or unavailable reading is not a normal-status indication.
+      - type: vertical-stack
+        cards:
+          - type: heading
+            heading: Overview
+            icon: mdi:gauge
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: tile
+                entity: sensor.YOUR_SUPPLY_TEMPERATURE
+                name: Supply temperature
+              - type: tile
+                entity: sensor.YOUR_RETURN_TEMPERATURE
+                name: Return temperature
+              - type: tile
+                entity: sensor.YOUR_TARGET_TEMPERATURE
+                name: Target temperature
+              - type: tile
+                entity: sensor.YOUR_BURNER_CONTROL_STATE
+                name: Burner state (raw code)
+      - type: vertical-stack
+        cards:
+          - type: heading
+            heading: Temperature trend
+            icon: mdi:chart-line
+          - type: history-graph
+            hours_to_show: 6
+            entities:
+              - entity: sensor.YOUR_SUPPLY_TEMPERATURE
+                name: Supply
+              - entity: sensor.YOUR_RETURN_TEMPERATURE
+                name: Return
+      - type: entities
+        title: Additional readings
+        entities:
+          - entity: sensor.YOUR_STACK_TEMPERATURE
+            name: Stack temperature
+          - entity: sensor.YOUR_DHW_TEMPERATURE
+            name: Domestic hot water temperature
+      - type: markdown
+        content: |
+          **Diagnostics are not yet implemented.** Pump status, demand, lockouts,
+          runtime and cycle counts are intentionally not shown until their
+          registers and meanings are validated.

@@ -1,0 +1,17 @@
+{
+  "domain": "burnham_alta",
+  "name": "Burnham ALTA",
+  "codeowners": [
+    "@aserper"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/aserper/boiler-pi",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/aserper/boiler-pi/issues",
+  "requirements": [
+    "pymodbus==3.13.1",
+    "pyserial>=3.5"
+  ],
+  "version": "0.1.0"
+}

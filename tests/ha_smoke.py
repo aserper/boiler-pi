@@ -90,6 +90,7 @@ async def main():
                 assert coordinator.update_interval == timedelta(seconds=10)
                 states = hass.states.async_all("sensor")
                 assert len(states) == 23, len(states)
+                entity_ids_before = {s.entity_id for s in states}
                 assert any(s.entity_id.endswith("burner_cycles") and s.state == "284" for s in states)
                 assert any(s.entity_id.endswith("dhw_temperature") and s.state == "unavailable" for s in states)
                 assert requests[:8] == list(BLOCKS)
@@ -106,10 +107,14 @@ async def main():
                 await coordinator.async_refresh()
                 assert any(s.entity_id.endswith("burner_cycles") and s.state == "284" for s in hass.states.async_all("sensor"))
                 options_form = await hass.config_entries.options.async_init(entry.entry_id)
-                await hass.config_entries.options.async_configure(options_form["flow_id"], user_input={"scan_interval": 15})
+                await hass.config_entries.options.async_configure(options_form["flow_id"], user_input={"scan_interval": 15, "ch1_name": "First floor / basement", "ch2_name": "Second floor", "dhw_name": "Hot water"})
                 await hass.async_block_till_done()
                 coordinator = hass.data["burnham_alta"][entry.entry_id]
                 assert coordinator.update_interval == timedelta(seconds=15)
+                after = hass.states.async_all("sensor")
+                assert {s.entity_id for s in after} == entity_ids_before
+                aliases = {s.attributes.get("consumer_name") for s in after if "consumer_name" in s.attributes}
+                assert aliases == {"First floor / basement", "Second floor", "Hot water"}, aliases
                 assert await hass.config_entries.async_unload(entry.entry_id)
                 assert coordinator.client.client is None
                 assert not failures, failures

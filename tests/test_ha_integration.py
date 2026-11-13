@@ -555,6 +555,11 @@ class SensorEntity:
         return self._attr_unique_id
 
     @property
+    def name(self) -> str | None:
+        """Mirror Entity.name: an explicit name wins over the description."""
+        return getattr(self, "_attr_name", None)
+
+    @property
     def device_info(self) -> dict[str, Any] | None:
         return self._attr_device_info
 
@@ -727,8 +732,11 @@ from custom_components.burnham_alta import sensor as sensor_module  # noqa: E402
 from custom_components.burnham_alta.const import (  # noqa: E402
     CONF_BAUDRATE,
     CONF_BYTESIZE,
+    CONF_CH1_NAME,
+    CONF_CH2_NAME,
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_ID,
+    CONF_DHW_NAME,
     CONF_HOST,
     CONF_PARITY,
     CONF_PORT,
@@ -737,11 +745,17 @@ from custom_components.burnham_alta.const import (  # noqa: E402
     CONF_STOPBITS,
     CONNECTION_SERIAL,
     CONNECTION_TCP,
+    DEFAULT_CH1_NAME,
+    DEFAULT_CH2_NAME,
+    DEFAULT_DHW_NAME,
     DEFAULT_SCAN_INTERVAL_SECONDS,
     DOMAIN,
+    MAX_CONSUMER_NAME_LENGTH,
     MAX_SCAN_INTERVAL_SECONDS,
     MIN_SCAN_INTERVAL_SECONDS,
     READ_BLOCKS,
+    consumer_name,
+    validate_consumer_name,
 )
 from custom_components.burnham_alta.coordinator import BurnhamAltaCoordinator  # noqa: E402
 from custom_components.burnham_alta.decoder import (  # noqa: E402
@@ -835,6 +849,58 @@ class NormalizeConfigTests(unittest.TestCase):
     def test_entry_title(self):
         self.assertIn("192.0.2.10:1502", entry_title_for(CONFIG_TCP))
         self.assertIn("ttyUSB0", entry_title_for(CONFIG_SERIAL))
+
+
+class ConsumerNameTests(unittest.TestCase):
+    def test_generic_defaults(self):
+        self.assertEqual(consumer_name(None, CONF_CH1_NAME), DEFAULT_CH1_NAME)
+        self.assertEqual(consumer_name({}, CONF_CH2_NAME), DEFAULT_CH2_NAME)
+        self.assertEqual(consumer_name({}, CONF_DHW_NAME), DEFAULT_DHW_NAME)
+
+    def test_labels_are_trimmed(self):
+        self.assertEqual(
+            consumer_name({CONF_CH1_NAME: "  Ground floor  "}, CONF_CH1_NAME),
+            "Ground floor",
+        )
+
+    def test_blank_missing_and_non_text_fall_back_to_default(self):
+        for value in ("", "   ", None, 3, True, ["Basement"]):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    consumer_name({CONF_CH1_NAME: value}, CONF_CH1_NAME),
+                    DEFAULT_CH1_NAME,
+                )
+
+    def test_overlong_stored_label_is_truncated(self):
+        label = consumer_name(
+            {CONF_CH1_NAME: "x" * (MAX_CONSUMER_NAME_LENGTH + 20)},
+            CONF_CH1_NAME,
+        )
+        self.assertEqual(len(label), MAX_CONSUMER_NAME_LENGTH)
+
+    def test_validation_accepts_trimmed_text_and_blank_default(self):
+        self.assertEqual(
+            validate_consumer_name(CONF_CH2_NAME, "  Attic  "), "Attic"
+        )
+        self.assertEqual(
+            validate_consumer_name(CONF_CH2_NAME, "   "), DEFAULT_CH2_NAME
+        )
+        self.assertEqual(
+            validate_consumer_name(CONF_DHW_NAME, "x" * MAX_CONSUMER_NAME_LENGTH),
+            "x" * MAX_CONSUMER_NAME_LENGTH,
+        )
+
+    def test_validation_rejects_absurd_length_and_non_text(self):
+        for value in (
+            "x" * (MAX_CONSUMER_NAME_LENGTH + 1),
+            3,
+            True,
+            None,
+            ["Basement"],
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    validate_consumer_name(CONF_CH1_NAME, value)
 
 
 class CreateClientTests(unittest.TestCase):
@@ -1148,6 +1214,13 @@ class OptionsFlowTests(unittest.IsolatedAsyncioTestCase):
         flow.handler = entry.entry_id
         return flow, entry
 
+    @staticmethod
+    def _defaults(result: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: key.default
+            for key in result["data_schema"].schema
+        }
+
     def test_config_flow_exposes_reloading_options_flow(self):
         flow = config_flow_module.BurnhamAltaConfigFlow.async_get_options_flow(
             ConfigEntry()
@@ -1162,30 +1235,82 @@ class OptionsFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["type"], "form")
         self.assertEqual(result["step_id"], "init")
-        default = next(
-            key.default
-            for key in result["data_schema"].schema
-            if key == CONF_SCAN_INTERVAL
+        defaults = self._defaults(result)
+        self.assertEqual(
+            defaults[CONF_SCAN_INTERVAL], DEFAULT_SCAN_INTERVAL_SECONDS
         )
-        self.assertEqual(default, DEFAULT_SCAN_INTERVAL_SECONDS)
+        self.assertEqual(defaults[CONF_CH1_NAME], DEFAULT_CH1_NAME)
+        self.assertEqual(defaults[CONF_CH2_NAME], DEFAULT_CH2_NAME)
+        self.assertEqual(defaults[CONF_DHW_NAME], DEFAULT_DHW_NAME)
 
-    async def test_form_shows_the_current_option(self):
-        flow, _ = self._flow({CONF_SCAN_INTERVAL: 45})
+    async def test_form_shows_the_current_options(self):
+        flow, _ = self._flow(
+            {
+                CONF_SCAN_INTERVAL: 45,
+                CONF_CH1_NAME: "Ground floor",
+                CONF_CH2_NAME: "Upstairs",
+                CONF_DHW_NAME: "Hot water",
+            }
+        )
         result = await flow.async_step_init()
 
-        default = next(
-            key.default
-            for key in result["data_schema"].schema
-            if key == CONF_SCAN_INTERVAL
-        )
-        self.assertEqual(default, 45)
+        defaults = self._defaults(result)
+        self.assertEqual(defaults[CONF_SCAN_INTERVAL], 45)
+        self.assertEqual(defaults[CONF_CH1_NAME], "Ground floor")
+        self.assertEqual(defaults[CONF_CH2_NAME], "Upstairs")
+        self.assertEqual(defaults[CONF_DHW_NAME], "Hot water")
 
     async def test_valid_submission_creates_options(self):
         flow, _ = self._flow()
         result = await flow.async_step_init({CONF_SCAN_INTERVAL: 120})
 
         self.assertEqual(result["type"], "create_entry")
-        self.assertEqual(result["data"], {CONF_SCAN_INTERVAL: 120})
+        self.assertEqual(
+            result["data"],
+            {
+                CONF_SCAN_INTERVAL: 120,
+                CONF_CH1_NAME: DEFAULT_CH1_NAME,
+                CONF_CH2_NAME: DEFAULT_CH2_NAME,
+                CONF_DHW_NAME: DEFAULT_DHW_NAME,
+            },
+        )
+
+    async def test_submission_stores_trimmed_labels(self):
+        flow, _ = self._flow()
+        result = await flow.async_step_init(
+            {
+                CONF_SCAN_INTERVAL: 20,
+                CONF_CH1_NAME: "  Ground floor  ",
+                CONF_CH2_NAME: "Loft",
+                CONF_DHW_NAME: "  Cylinder  ",
+            }
+        )
+
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"][CONF_CH1_NAME], "Ground floor")
+        self.assertEqual(result["data"][CONF_CH2_NAME], "Loft")
+        self.assertEqual(result["data"][CONF_DHW_NAME], "Cylinder")
+
+    async def test_blank_label_restores_the_default(self):
+        flow, _ = self._flow(
+            {
+                CONF_SCAN_INTERVAL: 20,
+                CONF_CH1_NAME: "Ground floor",
+            }
+        )
+        result = await flow.async_step_init(
+            {
+                CONF_SCAN_INTERVAL: 20,
+                CONF_CH1_NAME: "   ",
+                CONF_CH2_NAME: "",
+                CONF_DHW_NAME: "",
+            }
+        )
+
+        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["data"][CONF_CH1_NAME], DEFAULT_CH1_NAME)
+        self.assertEqual(result["data"][CONF_CH2_NAME], DEFAULT_CH2_NAME)
+        self.assertEqual(result["data"][CONF_DHW_NAME], DEFAULT_DHW_NAME)
 
     async def test_submission_preserves_unrelated_options(self):
         flow, _ = self._flow({"future_option": "keep me"})
@@ -1193,7 +1318,13 @@ class OptionsFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             result["data"],
-            {"future_option": "keep me", CONF_SCAN_INTERVAL: 20},
+            {
+                "future_option": "keep me",
+                CONF_SCAN_INTERVAL: 20,
+                CONF_CH1_NAME: DEFAULT_CH1_NAME,
+                CONF_CH2_NAME: DEFAULT_CH2_NAME,
+                CONF_DHW_NAME: DEFAULT_DHW_NAME,
+            },
         )
 
     async def test_invalid_submissions_return_field_error(self):
@@ -1215,6 +1346,23 @@ class OptionsFlowTests(unittest.IsolatedAsyncioTestCase):
                     "invalid_scan_interval",
                 )
 
+    async def test_invalid_consumer_labels_return_field_errors(self):
+        cases = (
+            (CONF_CH1_NAME, "x" * (MAX_CONSUMER_NAME_LENGTH + 1)),
+            (CONF_CH2_NAME, 7),
+            (CONF_DHW_NAME, ["Cylinder"]),
+        )
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                flow, _ = self._flow()
+                result = await flow.async_step_init(
+                    {CONF_SCAN_INTERVAL: 20, key: value}
+                )
+                self.assertEqual(result["type"], "form")
+                self.assertEqual(
+                    result["errors"], {key: "invalid_consumer_name"}
+                )
+
     async def test_missing_value_falls_back_to_default(self):
         flow, _ = self._flow()
         result = await flow.async_step_init({})
@@ -1224,6 +1372,7 @@ class OptionsFlowTests(unittest.IsolatedAsyncioTestCase):
             result["data"][CONF_SCAN_INTERVAL],
             DEFAULT_SCAN_INTERVAL_SECONDS,
         )
+        self.assertEqual(result["data"][CONF_CH1_NAME], DEFAULT_CH1_NAME)
 
 
 class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
@@ -1323,9 +1472,13 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SensorTests(unittest.IsolatedAsyncioTestCase):
-    async def _coordinator(self):
+    async def _coordinator(self, options: dict[str, Any] | None = None):
         hass = FakeHass()
-        entry = ConfigEntry(entry_id="entry-1", data=dict(CONFIG_TCP))
+        entry = ConfigEntry(
+            entry_id="entry-1",
+            data=dict(CONFIG_TCP),
+            options=dict(options or {}),
+        )
         client = AltaModbusClient(CONFIG_TCP, client=FakeTcpClient())
         coordinator = BurnhamAltaCoordinator(hass, entry, client)
         await coordinator.async_config_entry_first_refresh()
@@ -1343,6 +1496,96 @@ class SensorTests(unittest.IsolatedAsyncioTestCase):
         coordinator, _ = await self._coordinator()
         entities = self._entities(coordinator)
         self.assertEqual(set(entities), EXPECTED_SENSOR_KEYS)
+
+    async def test_demand_sensors_use_consumer_labels(self):
+        coordinator, _ = await self._coordinator(
+            {
+                CONF_CH1_NAME: "  Ground floor  ",
+                CONF_CH2_NAME: "Loft",
+                CONF_DHW_NAME: "Cylinder",
+            }
+        )
+        entities = self._entities(coordinator)
+        expected = {
+            "ch1_heat_demand": "Ground floor",
+            "ch2_heat_demand": "Loft",
+            "dhw_heat_demand": "Cylinder",
+        }
+
+        for key, label in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(entities[key].name, label)
+                self.assertEqual(
+                    entities[key].extra_state_attributes["consumer_name"],
+                    label,
+                )
+
+        for key in EXPECTED_SENSOR_KEYS - set(expected):
+            with self.subTest(key=key):
+                self.assertIsNone(entities[key].name)
+                self.assertNotIn(
+                    "consumer_name", entities[key].extra_state_attributes
+                )
+
+    async def test_demand_labels_change_without_changing_unique_ids(self):
+        coordinator, entry = await self._coordinator()
+        before = self._entities(coordinator)
+        self.assertEqual(
+            before["ch1_heat_demand"].name, DEFAULT_CH1_NAME
+        )
+        self.assertEqual(
+            before["dhw_heat_demand"].name, DEFAULT_DHW_NAME
+        )
+
+        # Reloading an entry constructs new entities from the same entry with
+        # updated options; unique IDs, and therefore entity IDs, must not move.
+        entry.options.update(
+            {
+                CONF_CH1_NAME: "Ground floor",
+                CONF_DHW_NAME: "Cylinder",
+            }
+        )
+        after = self._entities(coordinator)
+
+        self.assertEqual(
+            before["ch1_heat_demand"].unique_id,
+            after["ch1_heat_demand"].unique_id,
+        )
+        self.assertEqual(
+            before["dhw_heat_demand"].unique_id,
+            after["dhw_heat_demand"].unique_id,
+        )
+        self.assertEqual(after["ch1_heat_demand"].name, "Ground floor")
+        self.assertEqual(after["dhw_heat_demand"].name, "Cylinder")
+
+    async def test_sanitizes_stored_demand_labels(self):
+        coordinator, _ = await self._coordinator(
+            {
+                CONF_CH1_NAME: "   ",
+                CONF_CH2_NAME: "x" * (MAX_CONSUMER_NAME_LENGTH + 5),
+            }
+        )
+        entities = self._entities(coordinator)
+
+        self.assertEqual(
+            entities["ch1_heat_demand"].name, DEFAULT_CH1_NAME
+        )
+        self.assertEqual(
+            len(entities["ch2_heat_demand"].name),
+            MAX_CONSUMER_NAME_LENGTH,
+        )
+
+    async def test_consumer_label_survives_a_missing_reading(self):
+        coordinator, _ = await self._coordinator(
+            {CONF_CH1_NAME: "Ground floor"}
+        )
+        coordinator.data = decode_registers(13, CAPTURE_RAW[:2])
+        entity = self._entities(coordinator)["ch1_heat_demand"]
+
+        self.assertFalse(entity.available)
+        self.assertEqual(
+            entity.extra_state_attributes, {"consumer_name": "Ground floor"}
+        )
 
     async def test_values_and_raw_attributes(self):
         coordinator, entry = await self._coordinator()
@@ -1643,12 +1886,21 @@ class ReadOnlyTests(unittest.TestCase):
         )
         self.assertEqual(strings, translations)
         options = strings["config"]["options"]
+        init = options["step"]["init"]
+        self.assertEqual(init["data"][CONF_SCAN_INTERVAL], "Polling interval")
         self.assertEqual(
-            options["step"]["init"]["data"][CONF_SCAN_INTERVAL],
-            "Polling interval",
+            set(init["data"]),
+            {
+                CONF_SCAN_INTERVAL,
+                CONF_CH1_NAME,
+                CONF_CH2_NAME,
+                CONF_DHW_NAME,
+            },
         )
-        self.assertIn(CONF_SCAN_INTERVAL, options["step"]["init"]["data_description"])
+        for key in (CONF_SCAN_INTERVAL, CONF_CH1_NAME, CONF_CH2_NAME, CONF_DHW_NAME):
+            self.assertIn(key, init["data_description"])
         self.assertIn("invalid_scan_interval", options["error"])
+        self.assertIn("invalid_consumer_name", options["error"])
         self.assertEqual(
             set(strings["entity"]["sensor"]), EXPECTED_SENSOR_KEYS
         )

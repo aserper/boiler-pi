@@ -42,17 +42,24 @@
       "step": {
         "init": {
           "title": "Burnham ALTA options",
-          "description": "Choose how often Home Assistant reads the boiler. The integration is read-only.",
+          "description": "Choose how often Home Assistant reads the boiler and what its heat-demand loads are called. The integration is read-only.",
           "data": {
-            "scan_interval": "Polling interval"
+            "scan_interval": "Polling interval",
+            "ch1_name": "CH1 consumer label",
+            "ch2_name": "CH2 consumer label",
+            "dhw_name": "DHW consumer label"
           },
           "data_description": {
-            "scan_interval": "Seconds between reads, from 5 to 3600. The default is 10 seconds."
+            "scan_interval": "Seconds between reads, from 5 to 3600. The default is 10 seconds.",
+            "ch1_name": "Friendly name for the CH1 heat-demand sensor. Default: Central heat 1. Maximum 80 characters; blank restores the default.",
+            "ch2_name": "Friendly name for the CH2 heat-demand sensor. Default: Central heat 2. Maximum 80 characters; blank restores the default.",
+            "dhw_name": "Friendly name for the domestic-hot-water heat-demand sensor. Default: Domestic hot water. Maximum 80 characters; blank restores the default."
           }
         }
       },
       "error": {
-        "invalid_scan_interval": "Enter a whole number of seconds between 5 and 3600."
+        "invalid_scan_interval": "Enter a whole number of seconds between 5 and 3600.",
+        "invalid_consumer_name": "Enter a text label of at most 80 characters."
       }
     }
   },

@@ -16,9 +16,10 @@ The integration exposes 23 read-only sensors: target, supply, return, DHW and st
 
 Polling defaults to every 10 seconds. Use the integration's **Configure** dialog to choose a different interval in whole seconds, from 5 to 3600. The option is stored with the config entry; existing entries keep the 10 second default until it is changed, and Home Assistant reloads the entry when the option changes.
 
-The full native-card dashboard is in [`docs/dashboard-ready.yaml`](docs/dashboard-ready.yaml), with [installation notes](docs/dashboard-notes.md). Replace its placeholder entity IDs with those assigned by your installation. The [verification record](docs/verification.md) distinguishes automated tests, live boiler checks and provisional interpretations.
+The reference-styled dashboard is in [`docs/dashboard-styled.json`](docs/dashboard-styled.json), with [installation notes](docs/dashboard-notes.md). It uses button-card, card-mod and apexcharts-card for the custom layout; the native-card fallback remains in `docs/dashboard-ready.yaml`. Replace the placeholder entity IDs with those assigned by your installation. The [verification record](docs/verification.md) distinguishes automated tests, live boiler checks and provisional interpretations.
 
-## Development
+The **Configure** dialog also lets you name the CH1, CH2 and DHW consumers. These are display aliases only: existing entity IDs and boiler settings are unchanged. The styled dashboard reads the names automatically. Confirm the physical CH1/CH2 zone wiring before assigning floor names.
+
 ## Development
 
 The pure response decoder can be exercised without hardware or dependencies:

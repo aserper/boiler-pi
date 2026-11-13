@@ -1,0 +1,464 @@
+{
+  "title": "Burnham ALTA Boiler",
+  "views": [
+    {
+      "title": "Boiler",
+      "path": "boiler",
+      "icon": "mdi:fire",
+      "type": "panel",
+      "cards": [
+        {
+          "type": "custom:button-card",
+          "show_icon": false,
+          "show_name": false,
+          "show_state": false,
+          "tap_action": {
+            "action": "none"
+          },
+          "hold_action": {
+            "action": "none"
+          },
+          "double_tap_action": {
+            "action": "none"
+          },
+          "triggers_update": [
+            "sensor.ALTA_BURNER_CONTROL_STATE",
+            "sensor.ALTA_TARGET_TEMPERATURE",
+            "sensor.ALTA_SUPPLY_TEMPERATURE",
+            "sensor.ALTA_RETURN_TEMPERATURE",
+            "sensor.ALTA_DHW_TEMPERATURE",
+            "sensor.ALTA_STACK_TEMPERATURE",
+            "sensor.ALTA_DHW_HEAT_DEMAND",
+            "sensor.ALTA_CH1_HEAT_DEMAND",
+            "sensor.ALTA_CH2_HEAT_DEMAND",
+            "sensor.ALTA_HOLD_CODE",
+            "sensor.ALTA_LOCKOUT_CODE",
+            "sensor.ALTA_DEMAND_SOURCE",
+            "sensor.ALTA_FLAME_SIGNAL",
+            "sensor.ALTA_FAN_SPEED_DEMANDED",
+            "sensor.ALTA_FAN_SPEED_FEEDBACK",
+            "sensor.ALTA_PUMP_A_STATUS",
+            "sensor.ALTA_PUMP_B_STATUS",
+            "sensor.ALTA_PUMP_C_STATUS",
+            "sensor.ALTA_BURNER_RUN_TIME_HOURS",
+            "sensor.ALTA_BURNER_CYCLE_COUNT",
+            "sensor.ALTA_PUMP_A_CYCLES",
+            "sensor.ALTA_PUMP_B_CYCLES",
+            "sensor.ALTA_PUMP_C_CYCLES"
+          ],
+          "variables": {
+            "entities": {
+              "burner_control_state": "sensor.ALTA_BURNER_CONTROL_STATE",
+              "target_temperature": "sensor.ALTA_TARGET_TEMPERATURE",
+              "supply_temperature": "sensor.ALTA_SUPPLY_TEMPERATURE",
+              "return_temperature": "sensor.ALTA_RETURN_TEMPERATURE",
+              "dhw_temperature": "sensor.ALTA_DHW_TEMPERATURE",
+              "stack_temperature": "sensor.ALTA_STACK_TEMPERATURE",
+              "dhw_heat_demand": "sensor.ALTA_DHW_HEAT_DEMAND",
+              "ch1_heat_demand": "sensor.ALTA_CH1_HEAT_DEMAND",
+              "ch2_heat_demand": "sensor.ALTA_CH2_HEAT_DEMAND",
+              "hold_code": "sensor.ALTA_HOLD_CODE",
+              "lockout_code": "sensor.ALTA_LOCKOUT_CODE",
+              "demand_source": "sensor.ALTA_DEMAND_SOURCE",
+              "flame_signal": "sensor.ALTA_FLAME_SIGNAL",
+              "fan_speed_demanded": "sensor.ALTA_FAN_SPEED_DEMANDED",
+              "fan_speed_feedback": "sensor.ALTA_FAN_SPEED_FEEDBACK",
+              "pump_a_status": "sensor.ALTA_PUMP_A_STATUS",
+              "pump_b_status": "sensor.ALTA_PUMP_B_STATUS",
+              "pump_c_status": "sensor.ALTA_PUMP_C_STATUS",
+              "burner_run_time_hours": "sensor.ALTA_BURNER_RUN_TIME_HOURS",
+              "burner_cycle_count": "sensor.ALTA_BURNER_CYCLE_COUNT",
+              "pump_a_cycles": "sensor.ALTA_PUMP_A_CYCLES",
+              "pump_b_cycles": "sensor.ALTA_PUMP_B_CYCLES",
+              "pump_c_cycles": "sensor.ALTA_PUMP_C_CYCLES"
+            },
+            "ui": "[[[\nconst E = variables.entities;\nconst esc = x => String(x ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));\nconst state = k => states[E[k]];\nconst n = k => { const s = state(k)?.state; return s !== undefined && !['unknown','unavailable',''].includes(s) && Number.isFinite(Number(s)) ? Number(s) : null; };\nconst num = (k, unit='') => n(k) === null ? '<span class=\"missing\">Unavailable</span>' : esc(new Intl.NumberFormat(hass.locale?.language || 'en', {maximumFractionDigits:1}).format(n(k))) + (unit ? '<span class=\"unit\"> '+esc(unit)+'</span>' : '');\nconst icon = (name,cls='') => '<ha-icon class=\"'+cls+'\" icon=\"mdi:'+name+'\" aria-hidden=\"true\"></ha-icon>';\nconst title = (i,t) => '<h2>'+icon(i)+'<span>'+esc(t)+'</span></h2>';\nconst pill = (text,tone='neutral') => '<span class=\"pill '+tone+'\">'+esc(text)+'</span>';\nconst flag = k => n(k) === 1 ? pill('On','on') : n(k) === 0 ? pill('Off','off') : pill('Unknown','unknown');\nconst row = (i,label,value) => '<div class=\"data-row\">'+icon(i)+'<span class=\"row-label\">'+esc(label)+'</span><span class=\"row-value\">'+value+'</span></div>';\nconst panel = (i,t,body,cls='') => '<section class=\"panel '+cls+'\">'+title(i,t)+body+'</section>';\nconst burnerNames = {0:'Self check',1:'Standby',2:'Waiting for limit',3:'Prepurge',4:'Ignition',5:'Low fire hold',6:'Calibration',7:'Rate limit',8:'Modulating',9:'Postpurge',10:'Pump purge',11:'Standby delay',12:'Lockout',13:'Switch off',14:'Warm weather shutdown'};\nconst demandNames = {0:'Unknown',1:'Standby',2:'CH1',3:'CH2',4:'Domestic hot water',5:'Sequencer',6:'CH frost protection',7:'DHW frost protection',8:'Switch off',9:'Warm weather shutdown'};\nconst consumer = (key,fallback) => String(hass.entities?.[E[key]]?.name || state(key)?.attributes?.consumer_name || fallback);\nconst ch1 = consumer('ch1_heat_demand','Central heat 1');\nconst ch2 = consumer('ch2_heat_demand','Central heat 2');\nconst dhw = consumer('dhw_heat_demand','Domestic hot water');\nconst code = n('burner_control_state');\nconst burner = code === null ? 'Unknown' : (burnerNames[code] || 'Code '+code);\nconst burnerTone = code === null ? 'unknown' : code === 12 ? 'danger' : code === 8 ? 'on' : 'neutral';\nconst burnerPill = '<span title=\"ALTA manual HR 13; raw code '+esc(code ?? 'unavailable')+'\">'+pill(burner,burnerTone)+'</span>';\nconst sourceCode = n('demand_source');\nconst source = sourceCode === 2 ? ch1 : sourceCode === 3 ? ch2 : sourceCode === 4 ? dhw : sourceCode === null ? 'Unknown' : (demandNames[sourceCode] || 'Code '+sourceCode);\nconst hold = n('hold_code'), lock = n('lockout_code');\nconst codesKnown = hold !== null && lock !== null;\nconst clear = codesKnown && hold === 0 && lock === 0;\nconst core = ['supply_temperature','return_temperature','burner_control_state','hold_code','lockout_code'];\nconst available = core.filter(k=>n(k)!==null).length;\nconst connection = available===core.length ? 'Online' : available ? 'Partial data' : 'Offline';\nconst tempUnit = state('supply_temperature')?.attributes?.unit_of_measurement || '°F';\nconst retUnit = state('return_temperature')?.attributes?.unit_of_measurement || '°F';\nconst metric = (i,label,value) => '<div class=\"metric\"><div class=\"metric-label\">'+icon(i)+'<span>'+esc(label)+'</span></div><strong>'+value+'</strong></div>';\nconst temp = k => n(k)===null ? '—' : num(k).replace(/<[^>]*>/g,'')+'<span>'+esc(state(k)?.attributes?.unit_of_measurement || '°F')+'</span>';\nconst delta = n('supply_temperature')!==null && n('return_temperature')!==null && tempUnit===retUnit ? esc(new Intl.NumberFormat(hass.locale?.language || 'en',{maximumFractionDigits:1}).format(n('supply_temperature')-n('return_temperature')))+'<span>'+esc(tempUnit)+'</span>' : '—';\nconst overview = panel('gauge','Overview','<div class=\"metrics\">'+metric('thermometer','Supply Temp',temp('supply_temperature'))+metric('thermometer','Return Temp',temp('return_temperature'))+metric('delta','Delta-T',delta)+metric('target','Target Temp',temp('target_temperature'))+'</div><div class=\"burner-banner\">'+icon('fire','flame')+'<span>Burner State</span>'+burnerPill+'</div>');\nconst diagnosticNote = !codesKnown ? '<div class=\"notice unknown\">'+icon('help-circle-outline')+'<div><strong>Diagnostics unavailable</strong><small>Missing readings are not normal values.</small></div></div>' : clear ? '<div class=\"notice on\">'+icon('check-circle')+'<div><strong>No hold or lockout reported</strong><small>Both current codes are zero.</small></div></div>' : '<div class=\"notice danger\">'+icon('alert-circle')+'<div><strong>Boiler code reported</strong><small>Check the boiler display and manual.</small></div></div>';\nreturn {\n header:'<header class=\"page-header\">'+icon('fire','brand-flame')+'<div><h1>Burnham ALTA Boiler</h1><p>Read-only monitoring</p></div><div class=\"connection\" title=\"Availability of the main monitoring readings\">'+pill(connection,available===core.length?'on':available?'unknown':'off')+'</div></header>',\n overview,\n status:panel('layers-outline','Status',row('fire','Burner State',burnerPill)+row('source-branch','Demand Source','<span title=\"ALTA manual HR 100; raw code '+esc(sourceCode ?? 'unavailable')+'\">'+pill(source)+'</span>')+row('fire','Flame Signal',num('flame_signal','%'))+row('fan','Fan Speed',num('fan_speed_feedback','RPM'))+row('lock-outline','Lockout / Hold Status',!codesKnown ? '<span class=\"missing\">Unknown</span>' : clear ? 'Codes clear' : '<span class=\"fault\">Code present</span>')),\n pumps:panel('pump','Pumps',row('pump','System Pump',flag('pump_a_status'))+row('pump','Boiler Pump',flag('pump_b_status'))+row('pump','DHW Pump',flag('pump_c_status'))),\n demand:panel('waves','Demand',row('radiator',ch1,flag('ch1_heat_demand'))+row('radiator',ch2,flag('ch2_heat_demand'))+row('water-pump',dhw,flag('dhw_heat_demand'))),\n diagnostics:panel('alert-outline','Diagnostics / Alerts',row('tag-outline','Lockout Code',num('lockout_code'))+row('tag-outline','Hold Code',num('hold_code'))+diagnosticNote),\n lifetime:panel('chart-bar','Lifetime Stats',row('clock-outline','Burner Runtime',num('burner_run_time_hours','h'))+row('sync','Burner Cycles',num('burner_cycle_count'))+row('pump','System Pump Cycles',num('pump_a_cycles'))+row('pump','Boiler Pump Cycles',num('pump_b_cycles'))+row('pump','DHW Pump Cycles',num('pump_c_cycles'))),\n note:'<p class=\"footnote\">State names follow the ALTA manual; raw codes remain available in the entity details. Consumer labels do not confirm zone wiring. Counter decoding is provisional. This dashboard is not a boiler safety control.</p>'\n};\n]]]"
+          },
+          "styles": {
+            "card": [
+              {
+                "background": "#0e131b"
+              },
+              {
+                "border": "none"
+              },
+              {
+                "border-radius": "0"
+              },
+              {
+                "padding": "16px 18px 12px"
+              },
+              {
+                "box-shadow": "none"
+              },
+              {
+                "cursor": "default"
+              },
+              {
+                "color": "#f2f4f8"
+              },
+              {
+                "font-family": "var(--primary-font-family, Roboto, sans-serif)"
+              }
+            ],
+            "grid": [
+              {
+                "grid-template-areas": "\"header header header header header header header header header header header header\" \"overview overview overview overview overview overview overview status status status status status\" \"pumps pumps pumps pumps demand demand demand demand diagnostics diagnostics diagnostics diagnostics\" \"lifetime lifetime lifetime lifetime trend trend trend trend trend trend trend trend\" \"note note note note note note note note note note note note\""
+              },
+              {
+                "grid-template-columns": "repeat(12,minmax(0,1fr))"
+              },
+              {
+                "grid-template-rows": "72px 270px 208px 278px auto"
+              },
+              {
+                "gap": "14px"
+              }
+            ],
+            "custom_fields": {
+              "header": [
+                {
+                  "grid-area": "header"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "0"
+                }
+              ],
+              "overview": [
+                {
+                  "grid-area": "overview"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "1"
+                }
+              ],
+              "status": [
+                {
+                  "grid-area": "status"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "2"
+                }
+              ],
+              "pumps": [
+                {
+                  "grid-area": "pumps"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "3"
+                }
+              ],
+              "demand": [
+                {
+                  "grid-area": "demand"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "4"
+                }
+              ],
+              "diagnostics": [
+                {
+                  "grid-area": "diagnostics"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "5"
+                }
+              ],
+              "lifetime": [
+                {
+                  "grid-area": "lifetime"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "6"
+                }
+              ],
+              "note": [
+                {
+                  "grid-area": "note"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "8"
+                }
+              ],
+              "trend": [
+                {
+                  "grid-area": "trend"
+                },
+                {
+                  "min-width": "0"
+                },
+                {
+                  "width": "100%"
+                },
+                {
+                  "height": "100%"
+                },
+                {
+                  "text-align": "left"
+                },
+                {
+                  "white-space": "normal"
+                },
+                {
+                  "order": "7"
+                }
+              ]
+            }
+          },
+          "custom_fields": {
+            "header": "[[[ return variables.ui.header; ]]]",
+            "overview": "[[[ return variables.ui.overview; ]]]",
+            "status": "[[[ return variables.ui.status; ]]]",
+            "pumps": "[[[ return variables.ui.pumps; ]]]",
+            "demand": "[[[ return variables.ui.demand; ]]]",
+            "diagnostics": "[[[ return variables.ui.diagnostics; ]]]",
+            "lifetime": "[[[ return variables.ui.lifetime; ]]]",
+            "trend": {
+              "card": {
+                "type": "custom:apexcharts-card",
+                "header": {
+                  "show": true,
+                  "title": "Temperature Trend",
+                  "show_states": false
+                },
+                "graph_span": "6h",
+                "update_interval": "10s",
+                "series": [
+                  {
+                    "entity": "[[[ return variables.entities.supply_temperature; ]]]",
+                    "name": "Supply Temp",
+                    "color": "#22b9f0",
+                    "type": "area",
+                    "stroke_width": 2.5,
+                    "group_by": {
+                      "func": "avg",
+                      "duration": "1min"
+                    },
+                    "fill_raw": "null"
+                  },
+                  {
+                    "entity": "[[[ return variables.entities.return_temperature; ]]]",
+                    "name": "Return Temp",
+                    "color": "#ac72f1",
+                    "type": "area",
+                    "stroke_width": 2.5,
+                    "group_by": {
+                      "func": "avg",
+                      "duration": "1min"
+                    },
+                    "fill_raw": "null"
+                  }
+                ],
+                "apex_config": {
+                  "chart": {
+                    "height": 205,
+                    "background": "transparent",
+                    "foreColor": "#dbe1e9",
+                    "toolbar": {
+                      "show": false
+                    },
+                    "zoom": {
+                      "enabled": false
+                    },
+                    "animations": {
+                      "enabled": false
+                    }
+                  },
+                  "theme": {
+                    "mode": "dark"
+                  },
+                  "grid": {
+                    "borderColor": "#3a4452",
+                    "strokeDashArray": 0,
+                    "padding": {
+                      "left": 4,
+                      "right": 12,
+                      "top": 0,
+                      "bottom": 0
+                    }
+                  },
+                  "fill": {
+                    "type": "gradient",
+                    "gradient": {
+                      "shadeIntensity": 0,
+                      "opacityFrom": 0.3,
+                      "opacityTo": 0.06
+                    }
+                  },
+                  "legend": {
+                    "show": true,
+                    "position": "bottom",
+                    "fontSize": "13px",
+                    "labels": {
+                      "colors": "#e2e7ee"
+                    },
+                    "markers": {
+                      "size": 5
+                    }
+                  },
+                  "dataLabels": {
+                    "enabled": false
+                  },
+                  "stroke": {
+                    "curve": "smooth"
+                  },
+                  "xaxis": {
+                    "type": "datetime",
+                    "labels": {
+                      "datetimeUTC": false,
+                      "style": {
+                        "fontSize": "12px"
+                      }
+                    },
+                    "axisBorder": {
+                      "color": "#44505d"
+                    },
+                    "axisTicks": {
+                      "show": false
+                    }
+                  },
+                  "yaxis": {
+                    "decimalsInFloat": 0,
+                    "labels": {
+                      "style": {
+                        "fontSize": "12px"
+                      }
+                    }
+                  },
+                  "tooltip": {
+                    "theme": "dark"
+                  }
+                },
+                "card_mod": {
+                  "style": "ha-card { height:100%; box-sizing:border-box; background:linear-gradient(130deg,#252c36,#191f27); border:1px solid #4c5665; border-radius:16px; box-shadow:0 5px 14px #00000025; color:#f2f4f8; padding:0 10px 0 4px; } .card-header { font-size:21px!important; font-weight:700!important; padding:15px 13px 10px!important; color:#f2f4f8!important; } #header { padding:15px 12px 11px!important; margin:0 8px 4px; border-bottom:1px solid #444d5b; } #header__title { font-size:21px!important; font-weight:700!important; color:#f2f4f8!important; } #header__title::after { content:'Last 6 hours'; float:right; font-size:12px; font-weight:400; color:#c0c7d1; padding:4px 8px; border:1px solid #526071; border-radius:7px; }"
+                }
+              }
+            },
+            "note": "[[[ return variables.ui.note; ]]]"
+          },
+          "extra_styles": "\n:host { --alta-cyan:#27b9ed; --alta-purple:#af78f3; --alta-text:#f2f4f8; --alta-muted:#c0c7d1; }\n#container { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-template-areas:\"header header header header header header header header header header header header\" \"overview overview overview overview overview overview overview status status status status status\" \"pumps pumps pumps pumps demand demand demand demand diagnostics diagnostics diagnostics diagnostics\" \"lifetime lifetime lifetime lifetime trend trend trend trend trend trend trend trend\" \"note note note note note note note note note note note note\"; grid-template-rows:72px 270px 208px 278px auto; gap:14px; width:100%; max-width:1600px; margin:0 auto; }\n#container > div { min-width:0; width:100%; height:100%; text-align:left; white-space:normal; overflow:visible; }\n* { box-sizing:border-box; }\nha-icon { --mdc-icon-size:25px; width:25px; height:25px; flex-shrink:0; margin:0!important; color:#edf1f6; }\n.panel { height:100%; padding:15px 17px; border:1px solid #4c5665; border-radius:16px; background:linear-gradient(130deg,#252c36 0%,#191f27 100%); box-shadow:0 5px 14px #00000025; color:var(--alta-text); overflow:hidden; }\nh2 { display:flex; gap:12px; align-items:center; margin:0 0 8px; padding:0 0 11px; border-bottom:1px solid #444d5b; font-size:21px; line-height:1.15; font-weight:700; letter-spacing:-.25px; }\n.data-row { display:flex; gap:11px; align-items:center; min-height:39px; border-bottom:1px solid #3b4451; font-size:15px; line-height:1.25; }\n.data-row:last-child { border:0; }\n.row-label { flex:1; min-width:0; overflow-wrap:anywhere; }\n.row-value { flex:0 1 auto; max-width:60%; margin-left:auto; min-width:0; text-align:right; font-weight:650; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }\n.pill { display:inline-flex; align-items:center; justify-content:center; padding:4px 11px; border-radius:12px; background:linear-gradient(#4b545f,#353d48); color:#f7f8fa; font-size:14px; font-weight:550; line-height:1.2; max-width:100%; white-space:normal; text-align:center; }\n.pill.on { background:linear-gradient(#36733d,#24592e); box-shadow:inset 0 1px 0 #6b9b6550; }\n.pill.off { background:linear-gradient(#4b535e,#343b45); color:#e2e6ed; }\n.pill.unknown { background:#5a4729; color:#ffe6b3; }\n.pill.danger { background:#873e3e; }\n.unit { font-size:.92em; }\n.missing { font-size:13px; color:#e3c995; }\n.fault { color:#ffb2ac; }\n.page-header { display:flex; align-items:center; gap:14px; height:100%; padding:0 4px; }\n.page-header .brand-flame { width:45px; height:50px; --mdc-icon-size:50px; color:var(--alta-cyan); }\n.page-header h1 { margin:0 0 4px; font-size:32px; font-weight:750; letter-spacing:-.6px; line-height:1.1; color:var(--alta-text); }\n.page-header p { margin:0; font-size:16px; color:var(--alta-muted); }\n.connection { margin-left:auto; flex-shrink:0; }\n.connection .pill { padding:9px 13px; border:1px solid #4f7756; background:#19271f; font-size:14px; gap:7px; }\n.connection .pill::before { content:\"\"; width:9px; height:9px; border-radius:50%; background:#5bca62; }\n.connection .pill.unknown::before { background:#e5ba68; }\n.connection .pill.off::before { background:#aaa; }\n.metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin:20px 0 22px; }\n.metric { padding:0 14px; border-right:1px solid #47515f; text-align:center; min-width:0; }\n.metric:first-child { padding-left:0; }\n.metric:last-child { padding-right:0; border:0; }\n.metric-label { display:flex; align-items:center; justify-content:center; gap:8px; font-size:14px; white-space:normal; line-height:1.3; margin-bottom:10px; }\n.metric strong { font-size:32px; letter-spacing:-.8px; font-weight:750; font-variant-numeric:tabular-nums; line-height:1; }\n.metric strong span { font-size:.76em; letter-spacing:-.4px; }\n.burner-banner { display:flex; align-items:center; gap:15px; min-height:60px; border:1px solid #465161; border-radius:12px; padding:9px 15px; background:linear-gradient(110deg,#29323e,#242b35); font-size:19px; font-weight:550; }\n.burner-banner .flame { color:var(--alta-cyan); --mdc-icon-size:37px; width:37px; height:37px; }\n.burner-banner > span:last-child { margin-left:auto; }\n.burner-banner .pill { font-size:18px; padding:6px 14px; }\n.notice { display:flex; align-items:center; gap:10px; padding:9px 10px; margin-top:6px; border-radius:11px; line-height:1.15; }\n.notice strong { display:block; font-size:14px; }\n.notice small { display:block; margin-top:5px; font-size:12px; color:#e2e8e3; }\n.notice.on { background:#213f2b; border:1px solid #356342; }\n.notice.on ha-icon { color:#61d05d; }\n.notice.unknown { background:#443924; border:1px solid #75603a; }\n.notice.danger { background:#542d30; border:1px solid #8f5054; }\n.footnote { color:#a9b4c3; font-size:11px; line-height:1.5; margin:0 4px; max-width:110ch; }\n@media(max-width:1050px) {\n #container { grid-template-columns:repeat(6,minmax(0,1fr))!important; grid-template-areas:\"header header header header header header\" \"overview overview overview overview overview overview\" \"status status status status status status\" \"pumps pumps pumps demand demand demand\" \"diagnostics diagnostics diagnostics lifetime lifetime lifetime\" \"trend trend trend trend trend trend\" \"note note note note note note\"!important; grid-template-rows:72px 270px auto 208px auto 278px auto!important; }\n   .panel { min-height:208px; } #status .data-row { min-height:38px; }\n}\n@media(max-width:600px) {\n #container { display:flex!important; flex-direction:column; gap:12px; }\n #container > div { height:auto!important; } .page-header { min-height:72px; gap:9px; } .page-header h1 { font-size:23px; } .page-header p { font-size:13px; } .page-header .brand-flame { width:32px; --mdc-icon-size:36px; }\n .connection .pill { padding:7px 9px; font-size:12px; } .connection .pill::before { width:7px;height:7px; }\n .panel { padding:14px; min-height:0; } h2 { font-size:20px; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 0; margin:20px 0; } .metric:nth-child(2) { border:0; padding-right:0; } .metric:nth-child(3) { padding-left:0; } .metric strong { font-size:32px; } .metric-label { font-size:14px; }\n .burner-banner { font-size:17px; gap:8px; } .burner-banner .pill { font-size:15px; } .data-row { min-height:43px; font-size:15px; }    .footnote { font-size:11px; }\n}\n@media(prefers-reduced-motion:reduce) { * { animation:none!important; transition:none!important; } }\n"
+        }
+      ]
+    }
+  ]
+}

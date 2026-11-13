@@ -28,3 +28,9 @@ No boiler writes, reset commands or operating-parameter changes were performed. 
 ## Dashboard
 
 A separate `Burnham ALTA` dashboard was created through Home Assistant's Lovelace API, without replacing any existing dashboard. Its entity IDs were resolved through the config-entry/entity registry, not guessed from names. The native Sections layout was visually inspected in an authenticated, isolated browser at desktop and phone widths. It shows actual readings, demand and pump flags, raw state/fault codes, lifetime counters and recorder temperature history. On/off displays only accept documented 0/1 values; missing diagnostics are not rendered as normal. The phone layout stacks sections. Exact reference-image styling is approximated with native cards, not reproduced pixel-for-pixel.
+
+## Dashboard and names update
+
+The custom dashboard uses button-card, card-mod and apexcharts-card to match the supplied reference. It has been checked in the household Home Assistant at desktop and phone sizes. It uses real history and readings, handles missing data, escapes consumer names and respects entity-name overrides. The automation-ideas section has been removed as requested.
+
+An actual Home Assistant 2026.10.1 test confirmed that changing the three consumer names in Configure updates the `consumer_name` attributes while keeping all existing entity IDs. Polling options and read-only access are unchanged. Impeccable notes remain local and gitignored.

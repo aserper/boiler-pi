@@ -5,3 +5,8 @@ __pycache__/
 .coverage
 htmlcov/
 .pi/
+
+# Local-only design workflow and system notes
+.impeccable/
+PRODUCT.md
+DESIGN.md

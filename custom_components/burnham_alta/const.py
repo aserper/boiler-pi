@@ -54,6 +54,27 @@ CONF_PARITY = "parity"
 CONF_STOPBITS = "stopbits"
 CONF_DEVICE_ID = "device_id"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_CH1_NAME = "ch1_name"
+CONF_CH2_NAME = "ch2_name"
+CONF_DHW_NAME = "dhw_name"
+
+# The heat-demand registers are raw 0/1 values, but which zone or load each
+# one serves depends on the installation.  The Configure dialog therefore
+# stores consumer labels; these generic defaults apply until the installer
+# maps CH1, CH2 and DHW to actual floors or loads.
+DEFAULT_CH1_NAME = "Central heat 1"
+DEFAULT_CH2_NAME = "Central heat 2"
+DEFAULT_DHW_NAME = "Domestic hot water"
+
+CONSUMER_NAME_DEFAULTS: dict[str, str] = {
+    CONF_CH1_NAME: DEFAULT_CH1_NAME,
+    CONF_CH2_NAME: DEFAULT_CH2_NAME,
+    CONF_DHW_NAME: DEFAULT_DHW_NAME,
+}
+
+# A label is a display name, not a description.  The bound keeps a hand-edited
+# options file or a pasted paragraph from producing an unusable entity name.
+MAX_CONSUMER_NAME_LENGTH = 80
 
 DEFAULT_TCP_PORT = 502
 DEFAULT_DEVICE_ID = 1
@@ -123,3 +144,41 @@ def validate_scan_interval(value: Any) -> int:
             f"{MAX_SCAN_INTERVAL_SECONDS} seconds"
         )
     return seconds
+
+
+def consumer_name(options: Mapping[str, Any] | None, key: str) -> str:
+    """Return the safe display label for one heat-demand consumer.
+
+    The options flow validates input, but a config entry can also be
+    hand-edited or imported.  Runtime therefore never raises: a non-text,
+    blank, or missing stored value falls back to the generic default, and an
+    over-long value is truncated to the supported maximum.  Surrounding
+    whitespace is always removed so the entity name stays clean.
+    """
+    default = CONSUMER_NAME_DEFAULTS[key]
+    value: Any = None if options is None else options.get(key)
+    if not isinstance(value, str):
+        return default
+    label = value.strip()
+    if not label:
+        return default
+    return label[:MAX_CONSUMER_NAME_LENGTH].rstrip()
+
+
+def validate_consumer_name(key: str, value: Any) -> str:
+    """Validate a consumer label entered in the options flow.
+
+    Raises ``ValueError`` for anything that is not text or is longer than
+    :data:`MAX_CONSUMER_NAME_LENGTH`.  A blank label is accepted and returns
+    the generic default, matching how a stored blank value is interpreted at
+    runtime.
+    """
+    default = CONSUMER_NAME_DEFAULTS[key]
+    if not isinstance(value, str):
+        raise ValueError(f"{key} must be text")
+    label = value.strip()
+    if len(label) > MAX_CONSUMER_NAME_LENGTH:
+        raise ValueError(
+            f"{key} must be at most {MAX_CONSUMER_NAME_LENGTH} characters"
+        )
+    return label or default

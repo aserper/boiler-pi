@@ -22,6 +22,16 @@ reloads when the option is saved. Values outside the range are rejected in the
 dialog, and a stored value that cannot be used falls back to the default at
 runtime.
 
+The same dialog labels the three heat-demand sensors for the installation:
+CH1, CH2 and domestic hot water. The generic defaults are `Central heat 1`,
+`Central heat 2` and `Domestic hot water`; enter a floor, zone or load name
+once the mapping is known. Labels are trimmed, limited to 80 characters, and a
+blank value restores the default. The label becomes the sensor's friendly
+name. It does not change the unique ID or an existing entity ID, so
+dashboards keep working across an options reload. Each of those three sensors
+also exposes the current label as the `consumer_name` attribute, which lets a
+dashboard show a renamed load without hard-coding entity IDs.
+
 The pinned dependency is `pymodbus==3.13.1` plus `pyserial>=3.5`, matching Home Assistant
 2026.10.1's built-in Modbus integration. Pymodbus 3.13.1 constructs its async
 transport with a running event loop, so the client is created lazily inside
@@ -62,7 +72,8 @@ are unavailable rather than showing a fabricated value.
 ## Entities
 
 Only readings supported by the manufacturer's table 4-4 are created. All are
-read-only sensors.
+read-only sensors. The friendly names of the three heat-demand sensors use the
+consumer labels configured on the entry; the table lists their stable keys.
 
 | Entity key | Source | Interpretation |
 | --- | --- | --- |

@@ -40,8 +40,11 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_BAUDRATE,
+    CONF_CH1_NAME,
+    CONF_CH2_NAME,
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_ID,
+    CONF_DHW_NAME,
     CONF_HOST,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
@@ -62,7 +65,9 @@ from .const import (
     MIN_DEVICE_ID,
     MIN_SCAN_INTERVAL_SECONDS,
     MIN_TCP_PORT,
+    consumer_name,
     scan_interval_seconds,
+    validate_consumer_name,
     validate_scan_interval,
 )
 from .modbus import (
@@ -155,30 +160,41 @@ def _serial_schema(user_input: Mapping[str, Any] | None) -> Any:
     )
 
 
+_CONSUMER_NAME_KEYS = (CONF_CH1_NAME, CONF_CH2_NAME, CONF_DHW_NAME)
+
+
 def _options_schema(
     options: Mapping[str, Any],
     user_input: Mapping[str, Any] | None = None,
 ) -> Any:
-    """Build the polling-interval form, showing a safe current value."""
+    """Build the options form, showing safe current values."""
     current = scan_interval_seconds(
         user_input if user_input is not None else options
     )
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_SCAN_INTERVAL,
-                default=current,
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=MIN_SCAN_INTERVAL_SECONDS,
-                    max=MAX_SCAN_INTERVAL_SECONDS,
-                    step=1,
-                    mode=NumberSelectorMode.BOX,
-                    unit_of_measurement="s",
-                )
-            ),
-        }
-    )
+    schema: dict[Any, Any] = {
+        vol.Required(
+            CONF_SCAN_INTERVAL,
+            default=current,
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=MIN_SCAN_INTERVAL_SECONDS,
+                max=MAX_SCAN_INTERVAL_SECONDS,
+                step=1,
+                mode=NumberSelectorMode.BOX,
+                unit_of_measurement="s",
+            )
+        ),
+    }
+    for key in _CONSUMER_NAME_KEYS:
+        source = (
+            user_input
+            if user_input is not None and key in user_input
+            else options
+        )
+        schema[
+            vol.Required(key, default=consumer_name(source, key))
+        ] = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
+    return vol.Schema(schema)
 
 
 class BurnhamAltaConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -274,7 +290,7 @@ class BurnhamAltaConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BurnhamAltaOptionsFlow(OptionsFlowWithReload):
-    """Configure the polling interval.
+    """Configure the polling interval and the demand-sensor labels.
 
     ``OptionsFlowWithReload`` makes Home Assistant reload the entry after the
     options change, so the coordinator picks up the new interval without an
@@ -284,7 +300,7 @@ class BurnhamAltaOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the polling interval."""
+        """Manage the polling interval and consumer labels."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -296,11 +312,22 @@ class BurnhamAltaOptionsFlow(OptionsFlowWithReload):
                 )
             except ValueError:
                 errors[CONF_SCAN_INTERVAL] = "invalid_scan_interval"
-            else:
+
+            labels: dict[str, str] = {}
+            for key in _CONSUMER_NAME_KEYS:
+                try:
+                    labels[key] = validate_consumer_name(
+                        key, user_input.get(key, "")
+                    )
+                except ValueError:
+                    errors[key] = "invalid_consumer_name"
+
+            if not errors:
                 return self.async_create_entry(
                     data={
                         **self.config_entry.options,
                         CONF_SCAN_INTERVAL: seconds,
+                        **labels,
                     }
                 )
 

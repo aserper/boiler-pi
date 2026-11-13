@@ -29,7 +29,15 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import (
+    CONF_CH1_NAME,
+    CONF_CH2_NAME,
+    CONF_DHW_NAME,
+    DOMAIN,
+    MANUFACTURER,
+    MODEL,
+    consumer_name,
+)
 from .coordinator import BurnhamAltaCoordinator
 from .decoder import Reading, Register
 
@@ -44,6 +52,17 @@ _TEMPERATURE_DESCRIPTION: dict[str, Any] = {
     "state_class": SensorStateClass.MEASUREMENT,
     "native_unit_of_measurement": UnitOfTemperature.FAHRENHEIT,
     "suggested_display_precision": 0,
+}
+
+# The three heat-demand registers describe loads whose identity depends on the
+# installation, so each one carries an operator-supplied consumer label.  The
+# label changes only the friendly name and a diagnostic attribute; the unique
+# ID stays derived from the register key so entity IDs are stable across an
+# options reload.
+_CONSUMER_NAME_OPTIONS: dict[Register, str] = {
+    Register.DHW_HEAT_DEMAND: CONF_DHW_NAME,
+    Register.CH1_HEAT_DEMAND: CONF_CH1_NAME,
+    Register.CH2_HEAT_DEMAND: CONF_CH2_NAME,
 }
 
 # Only documented table 4-4 readings are listed.  Raw codes are plain integers:
@@ -290,6 +309,13 @@ class BurnhamAltaSensor(
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}_{description.key}"
         )
+        self._consumer_name: str | None = None
+        name_key = _CONSUMER_NAME_OPTIONS.get(register)
+        if name_key is not None:
+            self._consumer_name = consumer_name(
+                coordinator.config_entry.options, name_key
+            )
+            self._attr_name = self._consumer_name
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
             name=coordinator.config_entry.title,
@@ -327,10 +353,15 @@ class BurnhamAltaSensor(
 
         32-bit counters also expose both raw words in received order, so the
         provisional high-word-first interpretation can be checked against the
-        wire without a second tool.
+        wire without a second tool.  The three heat-demand sensors also expose
+        the configured consumer label for dashboards.
         """
         reading = self._reading
         if reading is None:
+            # The consumer label is configuration rather than a measurement,
+            # so it remains readable while the block is unavailable.
+            if self._consumer_name is not None:
+                return {"consumer_name": self._consumer_name}
             return None
         digits = reading.width // 4
         attributes: dict[str, int | str | list[str]] = {
@@ -341,4 +372,6 @@ class BurnhamAltaSensor(
             attributes["raw_words"] = [
                 f"0x{word:04X}" for word in reading.raw_words
             ]
+        if self._consumer_name is not None:
+            attributes["consumer_name"] = self._consumer_name
         return attributes

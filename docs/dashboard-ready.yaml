@@ -33,15 +33,15 @@ views:
             icon: mdi:gauge
           - type: tile
             entity: sensor.ALTA_SUPPLY_TEMPERATURE
-            name: Supply temperature
+            name: Supply
             icon: mdi:thermometer-chevron-up
           - type: tile
             entity: sensor.ALTA_RETURN_TEMPERATURE
-            name: Return temperature
+            name: Return
             icon: mdi:thermometer-chevron-down
           - type: tile
             entity: sensor.ALTA_TARGET_TEMPERATURE
-            name: Target temperature
+            name: Target
             icon: mdi:thermostat
           - type: markdown
             content: |
@@ -83,11 +83,12 @@ views:
             icon: mdi:radiator
           - type: markdown
             content: |
+              {% macro flag(entity) -%}{% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %}{%- endmacro %}
               | Consumer | Calling for heat |
               | :--- | ---: |
-              {% for label, entity in [('Domestic hot water', 'sensor.ALTA_DHW_HEAT_DEMAND'), ('Central heat 1', 'sensor.ALTA_CH1_HEAT_DEMAND'), ('Central heat 2', 'sensor.ALTA_CH2_HEAT_DEMAND')] %}
-              | {{ label }} | {% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %} |
-              {% endfor %}
+              | Domestic hot water | {{ flag('sensor.ALTA_DHW_HEAT_DEMAND') }} |
+              | Central heat 1 | {{ flag('sensor.ALTA_CH1_HEAT_DEMAND') }} |
+              | Central heat 2 | {{ flag('sensor.ALTA_CH2_HEAT_DEMAND') }} |
 
               A demand is a call for heat, not proof of burner operation.
           - type: heading
@@ -95,11 +96,12 @@ views:
             icon: mdi:pump
           - type: markdown
             content: |
+              {% macro flag(entity) -%}{% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %}{%- endmacro %}
               | Pump | Reported status |
               | :--- | ---: |
-              {% for label, entity in [('System · A', 'sensor.ALTA_PUMP_A_STATUS'), ('Boiler · B', 'sensor.ALTA_PUMP_B_STATUS'), ('DHW · C', 'sensor.ALTA_PUMP_C_STATUS')] %}
-              | {{ label }} | {% if is_state(entity, '1') %}On{% elif is_state(entity, '0') %}Off{% else %}Unknown{% endif %} |
-              {% endfor %}
+              | System · A | {{ flag('sensor.ALTA_PUMP_A_STATUS') }} |
+              | Boiler · B | {{ flag('sensor.ALTA_PUMP_B_STATUS') }} |
+              | DHW · C | {{ flag('sensor.ALTA_PUMP_C_STATUS') }} |
           - type: heading
             heading: Diagnostics
             icon: mdi:alert-outline

@@ -16,7 +16,7 @@ The integration exposes 23 read-only sensors: target, supply, return, DHW and st
 
 Polling defaults to every 10 seconds. Use the integration's **Configure** dialog to choose a different interval in whole seconds, from 5 to 3600. The option is stored with the config entry; existing entries keep the 10 second default until it is changed, and Home Assistant reloads the entry when the option changes.
 
-An optional starting-point dashboard is in [`docs/dashboard-example.yaml`](docs/dashboard-example.yaml). Replace the placeholder entity IDs with the IDs assigned by your installation. It uses built-in cards and does not fabricate unimplemented diagnostics.
+The full native-card dashboard is in [`docs/dashboard-ready.yaml`](docs/dashboard-ready.yaml), with [installation notes](docs/dashboard-notes.md). Replace its placeholder entity IDs with those assigned by your installation. The [verification record](docs/verification.md) distinguishes automated tests, live boiler checks and provisional interpretations.
 
 ## Development
 ## Development
